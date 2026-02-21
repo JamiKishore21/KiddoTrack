@@ -3,7 +3,7 @@ import { socket } from '../socket';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import MapComponent from '../components/MapComponent';
-import { Play, Square, MapPin } from 'lucide-react';
+import { Play, Square, MapPin, Send, AlertTriangle, Info, Siren, MessageSquare } from 'lucide-react';
 
 const DriverDashboard = () => {
     const { user } = useAuth();
@@ -18,6 +18,12 @@ const DriverDashboard = () => {
     // Route State
     const [assignedRoute, setAssignedRoute] = useState(null);
     const [mapMarkers, setMapMarkers] = useState([]);
+
+    // Communication State
+    const [statusMessage, setStatusMessage] = useState('');
+    const [statusType, setStatusType] = useState('info');
+    const [parentMessages, setParentMessages] = useState([]);
+    const messagesEndRef = useRef(null);
 
     useEffect(() => {
         // 1. Fetch available buses on load
@@ -133,9 +139,6 @@ const DriverDashboard = () => {
         socket.connect();
 
         if (selectedBus) {
-            // REGISTER LISTENERS FIRST to ensure we catch the 'activeParentsList' response
-
-            // Handle Initial Sync
             socket.on('activeParentsList', (list) => {
                 const map = {};
                 list.forEach(p => {
@@ -144,7 +147,6 @@ const DriverDashboard = () => {
                 setOnlineParents(prev => ({ ...prev, ...map }));
             });
 
-            // Handle Real-time Updates
             socket.on('parentLocationUpdate', (data) => {
                 setOnlineParents(prev => ({
                     ...prev,
@@ -152,7 +154,6 @@ const DriverDashboard = () => {
                 }));
             });
 
-            // Handle Disconnect
             socket.on('parentLeft', (data) => {
                 setOnlineParents(prev => {
                     const next = { ...prev };
@@ -161,7 +162,11 @@ const DriverDashboard = () => {
                 });
             });
 
-            // NOW join the room
+            // Receive messages from parents
+            socket.on('incomingParentMessage', (data) => {
+                setParentMessages(prev => [data, ...prev]);
+            });
+
             socket.emit('joinRoom', `bus_${selectedBus.busNumber}_driver`);
         }
 
@@ -279,8 +284,21 @@ const DriverDashboard = () => {
         }
     };
 
+    // Send a status/traffic update to all parents tracking this bus
+    const handleSendStatus = (e) => {
+        e.preventDefault();
+        if (!statusMessage.trim() || !selectedBus) return;
+        socket.emit('driverStatusUpdate', {
+            busId: selectedBus.busNumber,
+            message: statusMessage.trim(),
+            type: statusType,
+            driverName: user?.name || 'Driver'
+        });
+        setStatusMessage('');
+    };
+
     return (
-        <div className="p-4 max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-6 h-[calc(100vh-80px)]">
+        <div className="p-4 max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6 min-h-screen">
             {/* Control Panel */}
             <div className="space-y-6">
                 <h1 className="text-2xl font-bold text-indigo-800">Driver Dashboard</h1>
@@ -366,10 +384,86 @@ const DriverDashboard = () => {
                 </div>
             </div>
 
-            {/* Map Panel */}
-            <div className="bg-gray-200 rounded-2xl overflow-hidden shadow-inner border border-gray-300 relative h-full min-h-[400px]">
+            {/* Communication Panel */}
+            <div className="space-y-4">
+                {/* Status Update Broadcaster */}
+                <div className="bg-white rounded-xl shadow-lg p-5">
+                    <h2 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
+                        <Send size={17} className="text-indigo-500" /> Broadcast Update
+                    </h2>
+                    <form onSubmit={handleSendStatus} className="space-y-3">
+                        <div className="flex gap-2">
+                            {[
+                                { type: 'info', label: 'Info', icon: <Info size={13} />, color: 'blue' },
+                                { type: 'delay', label: 'Delay', icon: <AlertTriangle size={13} />, color: 'yellow' },
+                                { type: 'emergency', label: 'SOS', icon: <Siren size={13} />, color: 'red' },
+                            ].map(({ type, label, icon, color }) => (
+                                <button
+                                    key={type}
+                                    type="button"
+                                    onClick={() => setStatusType(type)}
+                                    className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs font-bold border-2 transition-all ${statusType === type
+                                            ? color === 'blue' ? 'border-blue-500 bg-blue-50 text-blue-700'
+                                                : color === 'yellow' ? 'border-yellow-500 bg-yellow-50 text-yellow-700'
+                                                    : 'border-red-500 bg-red-50 text-red-700'
+                                            : 'border-gray-200 text-gray-500'
+                                        }`}
+                                >
+                                    {icon} {label}
+                                </button>
+                            ))}
+                        </div>
+                        <textarea
+                            rows={3}
+                            className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-none"
+                            placeholder={
+                                statusType === 'info' ? 'e.g. Bus is on schedule, arriving soon...'
+                                    : statusType === 'delay' ? 'e.g. Stuck in traffic near MG Road, ~15 min delay'
+                                        : 'e.g. Emergency! Bus has broken down at Stop 3'
+                            }
+                            value={statusMessage}
+                            onChange={e => setStatusMessage(e.target.value)}
+                        />
+                        <button
+                            type="submit"
+                            disabled={!statusMessage.trim() || !selectedBus}
+                            className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 text-white rounded-lg font-semibold text-sm transition-colors flex items-center justify-center gap-2"
+                        >
+                            <Send size={15} /> Send to All Parents
+                        </button>
+                    </form>
+                </div>
 
-                {/* Actually need to import it at top. Assuming import is there. */}
+                {/* Messages from Parents */}
+                <div className="bg-white rounded-xl shadow-lg p-5 flex flex-col">
+                    <h2 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
+                        <MessageSquare size={17} className="text-indigo-500" />
+                        Messages from Parents
+                        {parentMessages.length > 0 && (
+                            <span className="ml-auto bg-indigo-600 text-white rounded-full text-xs px-2 py-0.5">{parentMessages.length}</span>
+                        )}
+                    </h2>
+                    <div className="space-y-2 max-h-64 overflow-y-auto">
+                        {parentMessages.length === 0 ? (
+                            <p className="text-sm text-gray-400 text-center py-4">No messages yet</p>
+                        ) : (
+                            parentMessages.map((msg, i) => (
+                                <div key={i} className="bg-indigo-50 rounded-lg p-3 text-sm">
+                                    <div className="flex justify-between items-center mb-1">
+                                        <span className="font-semibold text-indigo-700">{msg.studentName}'s Parent</span>
+                                        <span className="text-xs text-gray-400">{new Date(msg.timestamp).toLocaleTimeString()}</span>
+                                    </div>
+                                    <p className="text-gray-700">{msg.message}</p>
+                                </div>
+                            ))
+                        )}
+                        <div ref={messagesEndRef} />
+                    </div>
+                </div>
+            </div>
+
+            {/* Map Panel */}
+            <div className="bg-gray-200 rounded-2xl overflow-hidden shadow-inner border border-gray-300 relative min-h-[400px]">
                 <div className="absolute inset-0">
                     <MapComponent
                         markers={mapMarkers}
@@ -382,3 +476,4 @@ const DriverDashboard = () => {
 };
 
 export default DriverDashboard;
+

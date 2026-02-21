@@ -124,6 +124,26 @@ io.on('connection', (socket) => {
         console.log(`Bus ${data.busId} ended session.`);
     });
 
+    // Driver broadcasts a status/traffic update to all parents on this bus
+    socket.on('driverStatusUpdate', (data) => {
+        // data: { busId, message, type } — type: 'info' | 'delay' | 'emergency'
+        io.to(`bus_${data.busId}`).emit('busStatusUpdate', {
+            ...data,
+            timestamp: new Date().toISOString()
+        });
+        console.log(`[STATUS] Bus ${data.busId}: ${data.message}`);
+    });
+
+    // Parent sends a message to the driver of a specific bus
+    socket.on('parentMessage', (data) => {
+        // data: { busId, message, parentName, studentName }
+        io.to(`bus_${data.busId}_driver`).emit('incomingParentMessage', {
+            ...data,
+            timestamp: new Date().toISOString()
+        });
+        console.log(`[MSG] Parent of ${data.studentName} → Bus ${data.busId}: ${data.message}`);
+    });
+
     // Parent sends location (for Driver to see)
     socket.on('parentLocation', (data) => {
         // Cache this session

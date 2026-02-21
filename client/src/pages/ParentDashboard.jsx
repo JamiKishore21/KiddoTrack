@@ -3,7 +3,7 @@ import toast from 'react-hot-toast';
 import axios from 'axios';
 import { socket } from '../socket';
 import MapComponent from '../components/MapComponent';
-import { User, Bus, MapPin } from 'lucide-react';
+import { User, Bus, MapPin, Send, AlertTriangle, Info, Siren } from 'lucide-react';
 
 const ParentDashboard = () => {
     const [busLocation, setBusLocation] = useState(null);
@@ -18,6 +18,11 @@ const ParentDashboard = () => {
     // Students/Children State
     const [myStudents, setMyStudents] = useState([]);
     const [loadingStudents, setLoadingStudents] = useState(true);
+
+    // Communication State
+    const [busAlerts, setBusAlerts] = useState([]);
+    const [parentMsg, setParentMsg] = useState('');
+    const [sending, setSending] = useState(false);
 
     // Fetch My Students on Mount
     useEffect(() => {
@@ -65,6 +70,18 @@ const ParentDashboard = () => {
             setStatus('Live Tracking');
         });
 
+        // Listen for driver status/traffic updates
+        socket.on('busStatusUpdate', (data) => {
+            setBusAlerts(prev => [data, ...prev].slice(0, 5)); // keep last 5
+            if (data.type === 'emergency') {
+                toast.error(`🚨 Emergency: ${data.message}`, { duration: 10000 });
+            } else if (data.type === 'delay') {
+                toast(`⚠️ Delay: ${data.message}`, { duration: 8000, icon: '🕐' });
+            } else {
+                toast(`ℹ️ ${data.message}`, { duration: 5000 });
+            }
+        });
+
         // Get Parent's location for ETA & Share with Driver
         let watchId;
         if (navigator.geolocation) {
@@ -110,6 +127,7 @@ const ParentDashboard = () => {
 
         return () => {
             socket.off('busLocationUpdate');
+            socket.off('busStatusUpdate');
             socket.disconnect();
             if (watchId) {
                 navigator.geolocation.clearWatch(watchId);
@@ -227,11 +245,29 @@ const ParentDashboard = () => {
         if (student.bus) {
             setTrackedBusId(student.bus.busNumber);
             setIsTracking(true);
+            setBusAlerts([]);
             toast.success(`Tracking ${student.name}'s Bus`);
         } else {
             toast.error('No bus assigned to this student');
         }
-    }
+    };
+
+    // Send a message to the driver
+    const handleSendMessage = (e) => {
+        e.preventDefault();
+        if (!parentMsg.trim() || !trackedBusId) return;
+        setSending(true);
+        const userInfo = JSON.parse(localStorage.getItem('userInfo'));
+        socket.emit('parentMessage', {
+            busId: trackedBusId,
+            message: parentMsg.trim(),
+            parentName: userInfo?.name || 'Parent',
+            studentName: myStudents[0]?.name || 'Student'
+        });
+        setParentMsg('');
+        setSending(false);
+        toast.success('Message sent to driver!');
+    };
 
     if (!isTracking) {
         return (
@@ -329,7 +365,6 @@ const ParentDashboard = () => {
                         ...(busLocation ? [busLocation] : []),
                         ...(userLocation ? [{ ...userLocation, type: 'parent' }] : [])
                     ]}
-                    // Pass pure [{lat, lng}] array
                     drawLine={routeGeometry ? routeGeometry.map(p => ({ lat: p[1], lng: p[0] })) : (busLocation && userLocation ? [userLocation, busLocation] : null)}
                     initialViewState={{
                         latitude: busLocation?.lat || userLocation?.lat || 28.6139,
@@ -337,9 +372,52 @@ const ParentDashboard = () => {
                         zoom: 13
                     }}
                 />
+
+                {/* Driver Alerts Overlay */}
+                {busAlerts.length > 0 && (
+                    <div className="absolute top-3 left-3 right-3 z-10 space-y-2 pointer-events-none">
+                        {busAlerts.slice(0, 2).map((alert, i) => {
+                            const styles = {
+                                emergency: { bg: 'bg-red-600', text: 'text-white', icon: <Siren size={15} /> },
+                                delay: { bg: 'bg-yellow-400', text: 'text-yellow-900', icon: <AlertTriangle size={15} /> },
+                                info: { bg: 'bg-blue-500', text: 'text-white', icon: <Info size={15} /> },
+                            }[alert.type] || { bg: 'bg-gray-700', text: 'text-white', icon: <Info size={15} /> };
+                            return (
+                                <div key={i} className={`${styles.bg} ${styles.text} px-4 py-2 rounded-xl shadow-lg flex items-center gap-2 text-sm font-medium pointer-events-auto`}>
+                                    {styles.icon}
+                                    <div className="flex-1">
+                                        <span className="font-bold capitalize">{alert.type}: </span>{alert.message}
+                                    </div>
+                                    <span className="text-xs opacity-70">{new Date(alert.timestamp).toLocaleTimeString()}</span>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+
+                {/* Message Driver Panel */}
+                <div className="absolute bottom-4 left-3 right-3 z-10">
+                    <form onSubmit={handleSendMessage} className="bg-white/95 backdrop-blur rounded-2xl shadow-xl p-3 flex gap-2 items-center">
+                        <input
+                            type="text"
+                            className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                            placeholder="Message driver (e.g. My child is absent today)"
+                            value={parentMsg}
+                            onChange={e => setParentMsg(e.target.value)}
+                        />
+                        <button
+                            type="submit"
+                            disabled={!parentMsg.trim() || sending}
+                            className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 text-white p-2.5 rounded-lg transition-colors flex-shrink-0"
+                        >
+                            <Send size={16} />
+                        </button>
+                    </form>
+                </div>
             </div>
         </div>
     );
 };
 
 export default ParentDashboard;
+
