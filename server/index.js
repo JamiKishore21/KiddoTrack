@@ -170,3 +170,15 @@ const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
+
+server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+        console.error(`\n❌ Port ${PORT} is already in use.`);
+        console.error(`   Run this command to free it: netstat -ano | findstr :${PORT}`);
+        console.error(`   Then run: taskkill /F /PID <PID from above>\n`);
+        process.exit(1);
+    } else {
+        throw err;
+    }
+});
+
