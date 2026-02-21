@@ -1,7 +1,18 @@
 const User = require('../models/User');
+const OTP = require('../models/OTP');
 const jwt = require('jsonwebtoken');
 const { OAuth2Client } = require('google-auth-library');
 const bcrypt = require('bcryptjs');
+const nodemailer = require('nodemailer');
+
+// Nodemailer transporter
+const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+    },
+});
 
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -140,4 +151,101 @@ const getAllParents = async (req, res) => {
     }
 };
 
-module.exports = { registerUser, loginUser, googleLogin, getAllParents };
+// @desc    Send OTP to email for password reset
+// @route   POST /api/auth/forgot-password
+// @access  Public
+const sendOTP = async (req, res) => {
+    const { email } = req.body;
+    try {
+        const user = await User.findOne({ email });
+        if (!user) {
+            return res.status(404).json({ message: 'No account found with this email.' });
+        }
+        // Allow both manual and Google accounts — OTP email proves ownership
+
+        // Generate 6-digit OTP
+        const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+
+        // Hash OTP before saving
+        const salt = await bcrypt.genSalt(10);
+        const hashedOtp = await bcrypt.hash(otpCode, salt);
+
+        // Remove any existing OTP for this email, then save new one
+        await OTP.deleteMany({ email });
+        await OTP.create({ email, otp: hashedOtp });
+
+        // Send email
+        await transporter.sendMail({
+            from: `"KiddoTrack" <${process.env.EMAIL_USER}>`,
+            to: email,
+            subject: 'KiddoTrack — Password Reset OTP',
+            html: `
+                <div style="font-family:Arial,sans-serif;max-width:480px;margin:auto;padding:24px;border:1px solid #e5e7eb;border-radius:12px">
+                    <h2 style="color:#4f46e5;margin-bottom:8px">KiddoTrack Password Reset</h2>
+                    <p style="color:#374151">Use the OTP below to reset your password. It expires in <strong>10 minutes</strong>.</p>
+                    <div style="font-size:36px;font-weight:bold;letter-spacing:8px;text-align:center;padding:24px;background:#f0f0ff;border-radius:8px;color:#4f46e5;margin:24px 0">${otpCode}</div>
+                    <p style="color:#6b7280;font-size:13px">If you did not request this, please ignore this email.</p>
+                </div>
+            `,
+        });
+
+        res.json({ message: 'OTP sent successfully to your email.' });
+    } catch (error) {
+        console.error('sendOTP error:', error);
+        res.status(500).json({ message: 'Failed to send OTP. Please try again.' });
+    }
+};
+
+// @desc    Verify OTP and return a short-lived reset token
+// @route   POST /api/auth/verify-otp
+// @access  Public
+const verifyOTP = async (req, res) => {
+    const { email, otp } = req.body;
+    try {
+        const record = await OTP.findOne({ email });
+        if (!record) {
+            return res.status(400).json({ message: 'OTP has expired or was never sent. Please request a new one.' });
+        }
+
+        const isMatch = await bcrypt.compare(otp, record.otp);
+        if (!isMatch) {
+            return res.status(400).json({ message: 'Invalid OTP. Please try again.' });
+        }
+
+        // OTP is valid — delete it so it can't be reused
+        await OTP.deleteMany({ email });
+
+        // Issue a short-lived reset token (15 min)
+        const resetToken = jwt.sign({ email }, process.env.JWT_SECRET, { expiresIn: '15m' });
+        res.json({ resetToken });
+    } catch (error) {
+        console.error('verifyOTP error:', error);
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// @desc    Reset password using the reset token
+// @route   POST /api/auth/reset-password
+// @access  Public
+const resetPassword = async (req, res) => {
+    const { resetToken, newPassword } = req.body;
+    try {
+        const decoded = jwt.verify(resetToken, process.env.JWT_SECRET);
+        const user = await User.findOne({ email: decoded.email });
+        if (!user) {
+            return res.status(404).json({ message: 'User not found.' });
+        }
+
+        user.password = newPassword; // pre-save hook will hash it
+        await user.save();
+
+        res.json({ message: 'Password reset successfully! You can now log in with your new password.' });
+    } catch (error) {
+        if (error.name === 'TokenExpiredError') {
+            return res.status(400).json({ message: 'Reset session expired. Please start over.' });
+        }
+        res.status(500).json({ message: error.message });
+    }
+};
+
+module.exports = { registerUser, loginUser, googleLogin, getAllParents, sendOTP, verifyOTP, resetPassword };

@@ -76,10 +76,16 @@ const Login = () => {
                             placeholder="••••••••"
                             required
                         />
+                        <div className="text-right mt-1">
+                            <Link to="/forgot-password" className="text-xs text-indigo-500 hover:underline">
+                                Forgot Password?
+                            </Link>
+                        </div>
                     </div>
                     <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors">
                         Log In as {role.charAt(0).toUpperCase() + role.slice(1)}
                     </button>
+
                 </form>
 
                 <div className="relative my-6">
