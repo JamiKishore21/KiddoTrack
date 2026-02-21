@@ -26,7 +26,7 @@ const generateToken = (id) => {
 // @route   POST /api/auth/register
 // @access  Public
 const registerUser = async (req, res) => {
-    const { name, email, password, role } = req.body;
+    const { name, email, password } = req.body;
 
     try {
         const userExists = await User.findOne({ email });
@@ -38,11 +38,12 @@ const registerUser = async (req, res) => {
             return res.status(400).json({ message: 'User already exists' });
         }
 
+        // Public registration always creates a parent account
         const user = await User.create({
             name,
             email,
             password,
-            role: role || 'parent'
+            role: 'parent'
         });
 
         if (user) {
@@ -151,6 +152,47 @@ const getAllParents = async (req, res) => {
     }
 };
 
+// @desc    Get all users with role 'driver'
+// @route   GET /api/auth/drivers
+// @access  Private/Admin
+const getAllDrivers = async (req, res) => {
+    try {
+        const drivers = await User.find({ role: 'driver' }).select('-password').populate('assignedBus', 'busNumber plateNumber');
+        res.json(drivers);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// @desc    Create a driver account (admin only)
+// @route   POST /api/auth/create-driver
+// @access  Private/Admin
+const createDriver = async (req, res) => {
+    const { name, email, password } = req.body;
+    try {
+        const userExists = await User.findOne({ email });
+        if (userExists) {
+            return res.status(400).json({ message: 'An account with this email already exists.' });
+        }
+
+        const driver = await User.create({
+            name,
+            email,
+            password,
+            role: 'driver',
+        });
+
+        res.status(201).json({
+            _id: driver._id,
+            name: driver.name,
+            email: driver.email,
+            role: driver.role,
+        });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
 // @desc    Send OTP to email for password reset
 // @route   POST /api/auth/forgot-password
 // @access  Public
@@ -248,4 +290,4 @@ const resetPassword = async (req, res) => {
     }
 };
 
-module.exports = { registerUser, loginUser, googleLogin, getAllParents, sendOTP, verifyOTP, resetPassword };
+module.exports = { registerUser, loginUser, googleLogin, getAllParents, getAllDrivers, createDriver, sendOTP, verifyOTP, resetPassword };

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import MapComponent from '../components/MapComponent';
-import { Plus, Bus, Map as MapIcon, List } from 'lucide-react';
+import { Plus, Bus, Map as MapIcon, List, UserPlus } from 'lucide-react';
 import { socket } from '../socket';
 
 const AdminDashboard = () => {
@@ -12,8 +12,12 @@ const AdminDashboard = () => {
     const [routes, setRoutes] = useState([]);
     const [students, setStudents] = useState([]);
     const [users, setUsers] = useState([]);
+    const [drivers, setDrivers] = useState([]);
     const [showAddModal, setShowAddModal] = useState(false);
     const [showStudentModal, setShowStudentModal] = useState(false);
+    const [showDriverModal, setShowDriverModal] = useState(false);
+    const [driverFormData, setDriverFormData] = useState({ name: '', email: '', password: '' });
+    const [driverError, setDriverError] = useState('');
     const [studentFormData, setStudentFormData] = useState({
         name: '',
         parentId: '',
@@ -25,6 +29,7 @@ const AdminDashboard = () => {
         fetchRoutes();
         fetchStudents();
         fetchUsers();
+        fetchDrivers();
 
         // ... socket logic ...
     }, []);
@@ -47,13 +52,42 @@ const AdminDashboard = () => {
         try {
             const userInfo = JSON.parse(localStorage.getItem('userInfo'));
             const token = userInfo?.token;
-
             const { data } = await axios.get('http://localhost:5000/api/auth/parents', {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setUsers(data);
         } catch (error) {
             console.error('Error fetching parents:', error);
+        }
+    };
+
+    const fetchDrivers = async () => {
+        try {
+            const userInfo = JSON.parse(localStorage.getItem('userInfo'));
+            const token = userInfo?.token;
+            const { data } = await axios.get('http://localhost:5000/api/auth/drivers', {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setDrivers(data);
+        } catch (error) {
+            console.error('Error fetching drivers:', error);
+        }
+    };
+
+    const handleAddDriver = async (e) => {
+        e.preventDefault();
+        setDriverError('');
+        try {
+            const userInfo = JSON.parse(localStorage.getItem('userInfo'));
+            const token = userInfo?.token;
+            await axios.post('http://localhost:5000/api/auth/create-driver', driverFormData, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setShowDriverModal(false);
+            setDriverFormData({ name: '', email: '', password: '' });
+            fetchDrivers();
+        } catch (error) {
+            setDriverError(error.response?.data?.message || 'Error creating driver');
         }
     };
 
@@ -272,6 +306,9 @@ const AdminDashboard = () => {
                     <button onClick={() => setView('students')} className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${view === 'students' ? 'bg-indigo-100 text-indigo-700 font-semibold' : 'text-gray-600 hover:bg-gray-100'}`}>
                         <List size={20} /> Students
                     </button>
+                    <button onClick={() => setView('drivers')} className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${view === 'drivers' ? 'bg-indigo-100 text-indigo-700 font-semibold' : 'text-gray-600 hover:bg-gray-100'}`}>
+                        <UserPlus size={20} /> Drivers
+                    </button>
                     <button onClick={() => setView('map')} className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${view === 'map' ? 'bg-indigo-100 text-indigo-700 font-semibold' : 'text-gray-600 hover:bg-gray-100'}`}>
                         <MapIcon size={20} /> Live Map
                     </button>
@@ -427,6 +464,58 @@ const AdminDashboard = () => {
                     </div>
                 )}
 
+                {view === 'drivers' && (
+                    <div className="space-y-6">
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                            <div className="flex justify-between items-center mb-6">
+                                <div>
+                                    <h3 className="text-lg font-bold text-gray-800">Driver Accounts</h3>
+                                    <p className="text-xs text-gray-400 mt-0.5">Only admins can create driver accounts</p>
+                                </div>
+                                <button
+                                    onClick={() => { setShowDriverModal(true); setDriverError(''); }}
+                                    className="text-sm bg-indigo-50 text-indigo-600 hover:bg-indigo-100 px-3 py-1.5 rounded font-semibold transition-colors flex items-center gap-1"
+                                >
+                                    <UserPlus size={15} /> Add Driver
+                                </button>
+                            </div>
+                            <table className="w-full text-left text-sm text-gray-600">
+                                <thead className="bg-gray-50 text-gray-700 uppercase font-bold text-xs">
+                                    <tr>
+                                        <th className="px-4 py-3">Name</th>
+                                        <th className="px-4 py-3">Email</th>
+                                        <th className="px-4 py-3">Assigned Bus</th>
+                                        <th className="px-4 py-3">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {drivers.length === 0 ? (
+                                        <tr>
+                                            <td colSpan="4" className="px-4 py-8 text-center text-gray-400">No drivers yet. Add one to get started.</td>
+                                        </tr>
+                                    ) : (
+                                        drivers.map(driver => (
+                                            <tr key={driver._id} className="border-b hover:bg-gray-50">
+                                                <td className="px-4 py-3 font-medium text-gray-900">{driver.name}</td>
+                                                <td className="px-4 py-3">{driver.email}</td>
+                                                <td className="px-4 py-3">
+                                                    {driver.assignedBus
+                                                        ? <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-xs font-bold">Bus {driver.assignedBus.busNumber}</span>
+                                                        : <span className="text-gray-400 italic">Unassigned</span>
+                                                    }
+                                                </td>
+                                                <td className="px-4 py-3">
+                                                    <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded text-xs font-bold">Active</span>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
+
                 {view === 'map' && (
                     <div className="absolute inset-0 bg-gray-200 m-6 rounded-2xl overflow-hidden shadow-inner border border-gray-300">
                         <MapComponent
@@ -549,8 +638,39 @@ const AdminDashboard = () => {
                     </div>
                 </div>
             )}
+            {/* Add Driver Modal */}
+            {showDriverModal && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-in fade-in duration-200">
+                    <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl">
+                        <h2 className="text-xl font-bold mb-1">Add New Driver</h2>
+                        <p className="text-xs text-gray-400 mb-4">The driver will use these credentials to log in.</p>
+                        {driverError && (
+                            <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-lg mb-4 text-sm">{driverError}</div>
+                        )}
+                        <form onSubmit={handleAddDriver} className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                                <input type="text" required className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none" placeholder="e.g. Ravi Kumar" value={driverFormData.name} onChange={e => setDriverFormData({ ...driverFormData, name: e.target.value })} />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                                <input type="email" required className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none" placeholder="driver@example.com" value={driverFormData.email} onChange={e => setDriverFormData({ ...driverFormData, email: e.target.value })} />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                                <input type="password" required minLength={6} className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none" placeholder="Min. 6 characters" value={driverFormData.password} onChange={e => setDriverFormData({ ...driverFormData, password: e.target.value })} />
+                            </div>
+                            <div className="flex gap-3 mt-6">
+                                <button type="button" onClick={() => setShowDriverModal(false)} className="flex-1 py-2 text-gray-600 hover:bg-gray-50 rounded-lg border">Cancel</button>
+                                <button type="submit" className="flex-1 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Create Driver</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
 
 export default AdminDashboard;
+

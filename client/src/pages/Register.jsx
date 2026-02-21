@@ -2,10 +2,8 @@ import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { GoogleLogin } from '@react-oauth/google';
 import { useNavigate, Link } from 'react-router-dom';
-import { Bus, User, Shield } from 'lucide-react';
 
 const Register = () => {
-    const [role, setRole] = useState('parent');
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -16,7 +14,7 @@ const Register = () => {
     const handleManualRegister = async (e) => {
         e.preventDefault();
         try {
-            await register(name, email, password, role);
+            await register(name, email, password, 'parent');
             navigate('/dashboard');
         } catch (err) {
             setError(err);
@@ -25,7 +23,7 @@ const Register = () => {
 
     const handleGoogleSuccess = async (credentialResponse) => {
         try {
-            await googleLoginHandler(credentialResponse, role);
+            await googleLoginHandler(credentialResponse, 'parent');
             navigate('/dashboard');
         } catch (err) {
             setError(err);
@@ -35,23 +33,10 @@ const Register = () => {
     return (
         <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
             <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md">
-                <h2 className="text-3xl font-bold text-center mb-6 text-indigo-600">Create Account</h2>
-
-                {/* Role Selector */}
-                <div className="flex justify-center space-x-4 mb-8">
-                    <button onClick={() => setRole('parent')} className={`p-3 rounded-lg flex flex-col items-center gap-2 border-2 transition-all ${role === 'parent' ? 'border-indigo-500 bg-indigo-50 text-indigo-600' : 'border-gray-200 text-gray-500 hover:border-indigo-300'}`}>
-                        <User size={24} />
-                        <span className="text-xs font-medium">Parent</span>
-                    </button>
-                    <button onClick={() => setRole('driver')} className={`p-3 rounded-lg flex flex-col items-center gap-2 border-2 transition-all ${role === 'driver' ? 'border-indigo-500 bg-indigo-50 text-indigo-600' : 'border-gray-200 text-gray-500 hover:border-indigo-300'}`}>
-                        <Bus size={24} />
-                        <span className="text-xs font-medium">Driver</span>
-                    </button>
-                    <button onClick={() => setRole('admin')} className={`p-3 rounded-lg flex flex-col items-center gap-2 border-2 transition-all ${role === 'admin' ? 'border-indigo-500 bg-indigo-50 text-indigo-600' : 'border-gray-200 text-gray-500 hover:border-indigo-300'}`}>
-                        <Shield size={24} />
-                        <span className="text-xs font-medium">Admin</span>
-                    </button>
-                </div>
+                <h2 className="text-3xl font-bold text-center mb-2 text-indigo-600">Create Account</h2>
+                <p className="text-center text-sm text-gray-500 mb-6">
+                    Registering as a <span className="font-semibold text-indigo-500">Parent</span>
+                </p>
 
                 {error && <div className="bg-red-100 text-red-700 p-3 rounded mb-4 text-sm">{error}</div>}
 
@@ -90,7 +75,7 @@ const Register = () => {
                         />
                     </div>
                     <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors">
-                        Sign Up as {role.charAt(0).toUpperCase() + role.slice(1)}
+                        Sign Up
                     </button>
                 </form>
 
@@ -112,7 +97,11 @@ const Register = () => {
                     />
                 </div>
 
-                <p className="mt-8 text-center text-sm text-gray-600">
+                <p className="mt-8 text-center text-sm text-gray-500 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                    🚌 Driver accounts are created by the school admin.
+                </p>
+
+                <p className="mt-4 text-center text-sm text-gray-600">
                     Already have an account? <Link to="/login" className="text-indigo-600 hover:underline font-medium">Log in</Link>
                 </p>
             </div>
