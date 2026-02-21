@@ -6,11 +6,11 @@ import { Bus, User, Shield, ArrowLeft, Loader2, Mail, Lock, Eye, EyeOff, UserCir
 import ThemeToggle from '../components/ThemeToggle';
 
 const Register = () => {
-    const [role, setRole] = useState('parent');
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
+    const [role, setRole] = useState('parent');
     const { register, googleLoginHandler } = useAuth();
     const navigate = useNavigate();
     const [error, setError] = useState('');
@@ -21,7 +21,7 @@ const Register = () => {
         setLoading(true);
         setError('');
         try {
-            await register(name, email, password, role);
+            await register(name, email, password, 'parent');
             navigate('/dashboard');
         } catch (err) {
             setError(err);
@@ -32,7 +32,7 @@ const Register = () => {
 
     const handleGoogleSuccess = async (credentialResponse) => {
         try {
-            await googleLoginHandler(credentialResponse, role);
+            await googleLoginHandler(credentialResponse, 'parent');
             navigate('/dashboard');
         } catch (err) {
             setError(err);
@@ -46,9 +46,7 @@ const Register = () => {
     ];
 
     return (
-        <div className="min-h-screen-safe flex flex-col
-            bg-surface-50 dark:bg-surface-950">
-
+        <div className="min-h-screen-safe flex flex-col bg-surface-50 dark:bg-surface-950">
             {/* Top Bar */}
             <div className="flex items-center justify-between px-4 py-3">
                 <Link to="/" className="flex items-center gap-1.5 text-surface-500 dark:text-surface-400 hover:text-brand-600 dark:hover:text-brand-400 font-medium text-sm transition-colors">
@@ -62,27 +60,10 @@ const Register = () => {
 
                     <div className="text-center mb-6">
                         <div className="inline-flex bg-brand-100 dark:bg-brand-900/30 p-3.5 rounded-2xl mb-4">
-                            <User size={28} className="text-brand-600 dark:text-brand-400" />
+                            <UserCircle size={28} className="text-brand-600 dark:text-brand-400" />
                         </div>
                         <h2 className="text-2xl sm:text-3xl font-bold text-surface-900 dark:text-white">Create Account</h2>
                         <p className="text-surface-400 dark:text-surface-500 text-sm mt-1">Join KiddoTrack today</p>
-                    </div>
-
-                    {/* Role Selector */}
-                    <div className="flex mb-6 p-1 bg-surface-100 dark:bg-surface-900 rounded-xl border border-surface-200 dark:border-surface-700/40">
-                        {roles.map(r => (
-                            <button
-                                key={r.id}
-                                onClick={() => setRole(r.id)}
-                                className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg font-medium text-sm transition-all duration-200
-                                    ${role === r.id
-                                        ? 'bg-white dark:bg-surface-700 text-surface-900 dark:text-white shadow-sm'
-                                        : 'text-surface-400 dark:text-surface-500 hover:text-surface-600 dark:hover:text-surface-400'
-                                    }`}
-                            >
-                                <r.icon size={15} /> {r.label}
-                            </button>
-                        ))}
                     </div>
 
                     {error && (
@@ -126,23 +107,23 @@ const Register = () => {
                         </button>
                     </form>
 
-                    <p className="text-xs text-center text-surface-400 dark:text-surface-500 mt-4 leading-relaxed">
-                        By continuing, you agree to our{' '}
-                        <span className="text-brand-500 dark:text-brand-400 cursor-pointer">Terms</span> and{' '}
-                        <span className="text-brand-500 dark:text-brand-400 cursor-pointer">Privacy Policy</span>
-                    </p>
-
                     <div className="relative my-5">
                         <div className="absolute inset-0 flex items-center">
                             <div className="w-full border-t border-surface-200 dark:border-surface-700/40"></div>
                         </div>
                         <div className="relative flex justify-center text-sm">
-                            <span className="px-3 bg-white dark:bg-surface-800 text-surface-400 dark:text-surface-500">or</span>
+                            <span className="px-3 bg-white dark:bg-surface-800 text-surface-400 dark:text-surface-500">or continue with</span>
                         </div>
                     </div>
 
                     <div className="flex justify-center">
                         <GoogleLogin onSuccess={handleGoogleSuccess} onError={() => setError('Google Login Failed')} text="signup_with" width="320" shape="pill" />
+                    </div>
+
+                    <div className="mt-6 p-3 bg-brand-50 dark:bg-brand-900/10 border border-brand-100 dark:border-brand-900/20 rounded-xl">
+                        <p className="text-xs text-center text-brand-700 dark:text-brand-300 flex items-center justify-center gap-2">
+                            <Bus size={14} /> Driver accounts are created by the school admin.
+                        </p>
                     </div>
 
                     <p className="mt-5 text-center text-sm text-surface-500 dark:text-surface-400">

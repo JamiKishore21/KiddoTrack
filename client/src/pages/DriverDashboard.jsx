@@ -3,7 +3,7 @@ import { socket } from '../socket';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import MapComponent from '../components/MapComponent';
-import { Play, Square, MapPin, LogOut, Radio } from 'lucide-react';
+import { Play, Square, MapPin, LogOut, Radio, Send, AlertTriangle, Info, Siren, MessageSquare } from 'lucide-react';
 import ThemeToggle from '../components/ThemeToggle';
 
 const DriverDashboard = () => {
@@ -18,6 +18,12 @@ const DriverDashboard = () => {
     const [mapMarkers, setMapMarkers] = useState([]);
     const [panelExpanded, setPanelExpanded] = useState(true);
     const [onlineParents, setOnlineParents] = useState({});
+
+    // Communication State
+    const [statusMessage, setStatusMessage] = useState('');
+    const [statusType, setStatusType] = useState('info');
+    const [parentMessages, setParentMessages] = useState([]);
+    const messagesEndRef = useRef(null);
 
     useEffect(() => {
         axios.get('http://localhost:5000/api/buses')
@@ -55,6 +61,7 @@ const DriverDashboard = () => {
             socket.on('activeParentsList', (list) => { const map = {}; list.forEach(p => { map[p.studentName] = { lat: p.lat, lng: p.lng, type: 'parent', studentName: p.studentName }; }); setOnlineParents(prev => ({ ...prev, ...map })); });
             socket.on('parentLocationUpdate', (d) => setOnlineParents(prev => ({ ...prev, [d.studentName]: { lat: d.lat, lng: d.lng, type: 'parent', studentName: d.studentName } })));
             socket.on('parentLeft', (d) => setOnlineParents(prev => { const n = { ...prev }; delete n[d.studentName]; return n; }));
+            socket.on('incomingParentMessage', (data) => setParentMessages(prev => [data, ...prev]));
             socket.emit('joinRoom', `bus_${selectedBus.busNumber}_driver`);
         }
         return () => { socket.off('parentLocationUpdate'); socket.off('activeParentsList'); socket.off('parentLeft'); socket.disconnect(); if (watchIdRef.current) navigator.geolocation.clearWatch(watchIdRef.current); };
@@ -88,6 +95,19 @@ const DriverDashboard = () => {
         if (watchIdRef.current) { navigator.geolocation.clearWatch(watchIdRef.current); watchIdRef.current = null; }
     };
 
+    // Send a status/traffic update to all parents tracking this bus
+    const handleSendStatus = (e) => {
+        e.preventDefault();
+        if (!statusMessage.trim() || !selectedBus) return;
+        socket.emit('driverStatusUpdate', {
+            busId: selectedBus.busNumber,
+            message: statusMessage.trim(),
+            type: statusType,
+            driverName: user?.name || 'Driver'
+        });
+        setStatusMessage('');
+    };
+
     return (
         <div className="h-screen-safe flex flex-col md:flex-row overflow-hidden bg-surface-100 dark:bg-surface-950">
             {/* Map */}
@@ -100,12 +120,12 @@ const DriverDashboard = () => {
                     <div className="bg-glass border-b border-surface-200/50 dark:border-surface-700/40 px-4 py-3 flex items-center justify-between">
                         <div className="flex items-center gap-2">
                             <h1 className="text-lg font-bold text-surface-900 dark:text-white">Driver</h1>
-                            {selectedBus && <span className="badge badge-info">BUS-{selectedBus.busNumber}</span>}
+                            {selectedBus && <span className="badge badge-info text-[10px]">BUS-{selectedBus.busNumber}</span>}
                         </div>
                         <div className="flex items-center gap-2">
-                            {isSharing && <span className="badge badge-success"><Radio size={10} className="animate-pulse" /> LIVE</span>}
+                            {isSharing && <span className="badge badge-success px-2 py-0.5 text-[10px]"><Radio size={8} className="animate-pulse" /> LIVE</span>}
                             <ThemeToggle />
-                            <button onClick={logout} className="btn-ghost p-1.5"><LogOut size={18} /></button>
+                            <button onClick={logout} className="btn-ghost p-1.5"><LogOut size={16} /></button>
                         </div>
                     </div>
                 </div>
@@ -171,6 +191,74 @@ const DriverDashboard = () => {
                             <Square size={22} fill="currentColor" /> Stop Trip
                         </button>
                     )}
+
+                    {/* Status Update Broadcaster */}
+                    <div className="bg-surface-50 dark:bg-surface-900 p-4 rounded-2xl border border-surface-200 dark:border-surface-700/40">
+                        <h3 className="text-xs font-bold text-surface-900 dark:text-white mb-3 flex items-center gap-2">
+                            <Send size={14} className="text-brand-500" /> Broadcast Status
+                        </h3>
+                        <form onSubmit={handleSendStatus} className="space-y-3">
+                            <div className="flex gap-1.5">
+                                {[
+                                    { type: 'info', icon: <Info size={12} /> },
+                                    { type: 'delay', icon: <AlertTriangle size={12} /> },
+                                    { type: 'emergency', icon: <Siren size={12} /> },
+                                ].map(({ type, icon }) => (
+                                    <button
+                                        key={type}
+                                        type="button"
+                                        onClick={() => setStatusType(type)}
+                                        className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-xl text-[10px] font-bold border transition-all ${statusType === type
+                                            ? 'bg-brand-500 border-brand-500 text-white shadow-sm'
+                                            : 'bg-white dark:bg-surface-800 border-surface-200 dark:border-surface-700/50 text-surface-500'
+                                            }`}
+                                    >
+                                        {icon} {type.toUpperCase()}
+                                    </button>
+                                ))}
+                            </div>
+                            <textarea
+                                rows={2}
+                                className="input py-2 text-xs resize-none"
+                                placeholder="Message to parents..."
+                                value={statusMessage}
+                                onChange={e => setStatusMessage(e.target.value)}
+                            />
+                            <button
+                                type="submit"
+                                disabled={!statusMessage.trim() || !selectedBus}
+                                className="btn-secondary w-full py-2 text-xs flex items-center justify-center gap-2"
+                            >
+                                <Send size={14} /> Send Broadcast
+                            </button>
+                        </form>
+                    </div>
+
+                    {/* Messages from Parents */}
+                    <div className="bg-surface-50 dark:bg-surface-900 p-4 rounded-2xl border border-surface-200 dark:border-surface-700/40">
+                        <h3 className="text-xs font-bold text-surface-900 dark:text-white mb-3 flex items-center gap-2">
+                            <MessageSquare size={14} className="text-brand-500" /> Parent Messages
+                            {parentMessages.length > 0 && <span className="badge badge-info text-[10px] px-1.5 py-0 min-w-[18px] text-center">{parentMessages.length}</span>}
+                        </h3>
+                        <div className="space-y-2 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
+                            {parentMessages.length === 0 ? (
+                                <p className="text-[10px] text-surface-400 text-center py-4 italic">No messages yet</p>
+                            ) : (
+                                parentMessages.map((msg, i) => (
+                                    <div key={i} className="bg-white dark:bg-surface-800 rounded-xl p-2.5 border border-surface-200/50 dark:border-surface-700/30">
+                                        <div className="flex justify-between items-center mb-1">
+                                            <span className="font-bold text-[10px] text-brand-600 dark:text-brand-400 capitalize">{msg.studentName || 'Parent'}</span>
+                                            <span className="text-[8px] text-surface-400 font-mono">{new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                        </div>
+                                        <p className="text-[11px] text-surface-600 dark:text-surface-300 leading-snug">{msg.message}</p>
+                                    </div>
+                                ))
+                            )}
+                            <div ref={messagesEndRef} />
+                        </div>
+                    </div>
+
+                    <p className="text-center text-[10px] text-surface-400 dark:text-surface-500 pt-2 italic">Keep this tab open for background tracking.</p>
                 </div>
             </div>
         </div>
@@ -178,3 +266,4 @@ const DriverDashboard = () => {
 };
 
 export default DriverDashboard;
+

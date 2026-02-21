@@ -113,7 +113,12 @@ const Login = () => {
 
                         {/* Password */}
                         <div>
-                            <label className="label">Password</label>
+                            <div className="flex items-center justify-between mb-1.5">
+                                <label className="label mb-0">Password</label>
+                                <Link to="/forgot-password" id="forgot-password-link" className="text-xs font-semibold text-brand-600 dark:text-brand-400 hover:underline">
+                                    Forgot Password?
+                                </Link>
+                            </div>
                             <div className="input-icon-wrapper">
                                 <Lock size={18} className="input-icon" />
                                 <input
@@ -167,6 +172,7 @@ const Login = () => {
                             shape="pill"
                         />
                     </div>
+
 
                     {/* Trust section */}
                     <div className="mt-6 flex flex-col items-center gap-1.5">

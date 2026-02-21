@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import MapComponent from '../components/MapComponent';
-import { Plus, Bus, Map as MapIcon, Users, Route, LogOut, Radio } from 'lucide-react';
+import { Plus, Bus, Map as MapIcon, Users, Route, LogOut, Radio, List, UserPlus } from 'lucide-react';
 import { socket } from '../socket';
 import ThemeToggle from '../components/ThemeToggle';
 
@@ -13,8 +13,12 @@ const AdminDashboard = () => {
     const [routes, setRoutes] = useState([]);
     const [students, setStudents] = useState([]);
     const [users, setUsers] = useState([]);
+    const [drivers, setDrivers] = useState([]);
     const [showAddModal, setShowAddModal] = useState(false);
     const [showStudentModal, setShowStudentModal] = useState(false);
+    const [showDriverModal, setShowDriverModal] = useState(false);
+    const [driverFormData, setDriverFormData] = useState({ name: '', email: '', password: '' });
+    const [driverError, setDriverError] = useState('');
     const [studentFormData, setStudentFormData] = useState({ name: '', parentId: '', busId: '' });
     const [formData, setFormData] = useState({ busNumber: '', plateNumber: '', capacity: '' });
     const [allBusLocations, setAllBusLocations] = useState([]);
@@ -25,10 +29,28 @@ const AdminDashboard = () => {
 
     const fetchStudents = async () => { try { const t = JSON.parse(localStorage.getItem('userInfo'))?.token; const { data } = await axios.get('http://localhost:5000/api/students', { headers: { Authorization: `Bearer ${t}` } }); setStudents(data); } catch (e) { console.error(e); } };
     const fetchUsers = async () => { try { const t = JSON.parse(localStorage.getItem('userInfo'))?.token; const { data } = await axios.get('http://localhost:5000/api/auth/parents', { headers: { Authorization: `Bearer ${t}` } }); setUsers(data); } catch (e) { console.error(e); } };
+    const fetchDrivers = async () => { try { const t = JSON.parse(localStorage.getItem('userInfo'))?.token; const { data } = await axios.get('http://localhost:5000/api/auth/drivers', { headers: { Authorization: `Bearer ${t}` } }); setDrivers(data); } catch (e) { console.error(e); } };
+
+    const handleAddDriver = async (e) => {
+        e.preventDefault();
+        setDriverError('');
+        try {
+            const token = JSON.parse(localStorage.getItem('userInfo'))?.token;
+            await axios.post('http://localhost:5000/api/auth/create-driver', driverFormData, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setShowDriverModal(false);
+            setDriverFormData({ name: '', email: '', password: '' });
+            fetchDrivers();
+        } catch (error) {
+            setDriverError(error.response?.data?.message || 'Error creating driver');
+        }
+    };
+
     const handleAddStudent = async (e) => { e.preventDefault(); try { const t = JSON.parse(localStorage.getItem('userInfo'))?.token; await axios.post('http://localhost:5000/api/students', studentFormData, { headers: { Authorization: `Bearer ${t}` } }); setShowStudentModal(false); setStudentFormData({ name: '', parentId: '', busId: '' }); fetchStudents(); } catch (e) { alert(e.response?.data?.message || 'Error'); } };
 
     useEffect(() => {
-        fetchBuses(); fetchRoutes();
+        fetchBuses(); fetchRoutes(); fetchStudents(); fetchUsers(); fetchDrivers();
         socket.on('busLocationUpdate', (d) => { setAllBusLocations(prev => { const i = prev.findIndex(b => String(b.busId) === String(d.busId)); if (i > -1) { const n = [...prev]; n[i] = { ...n[i], ...d }; return n; } return [...prev, d]; }); });
         socket.on('activeBusList', (l) => { setAllBusLocations(prev => { const m = {}; prev.forEach(p => m[p.busId] = p); l.forEach(p => m[p.busId] = p); return Object.values(m); }); });
         socket.on('busSessionEnded', (d) => { setAllBusLocations(prev => prev.filter(b => b.busId !== d.busId)); });
@@ -46,6 +68,7 @@ const AdminDashboard = () => {
         { id: 'list', label: 'Buses', icon: Bus },
         { id: 'routes', label: 'Routes', icon: Route },
         { id: 'students', label: 'Students', icon: Users },
+        { id: 'drivers', label: 'Drivers', icon: UserPlus },
         { id: 'map', label: 'Live Map', icon: MapIcon },
     ];
 
@@ -173,6 +196,58 @@ const AdminDashboard = () => {
                     </div>
                 )}
 
+                {view === 'drivers' && (
+                    <div className="space-y-6">
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                            <div className="flex justify-between items-center mb-6">
+                                <div>
+                                    <h3 className="text-lg font-bold text-gray-800">Driver Accounts</h3>
+                                    <p className="text-xs text-gray-400 mt-0.5">Only admins can create driver accounts</p>
+                                </div>
+                                <button
+                                    onClick={() => { setShowDriverModal(true); setDriverError(''); }}
+                                    className="text-sm bg-indigo-50 text-indigo-600 hover:bg-indigo-100 px-3 py-1.5 rounded font-semibold transition-colors flex items-center gap-1"
+                                >
+                                    <UserPlus size={15} /> Add Driver
+                                </button>
+                            </div>
+                            <table className="w-full text-left text-sm text-gray-600">
+                                <thead className="bg-gray-50 text-gray-700 uppercase font-bold text-xs">
+                                    <tr>
+                                        <th className="px-4 py-3">Name</th>
+                                        <th className="px-4 py-3">Email</th>
+                                        <th className="px-4 py-3">Assigned Bus</th>
+                                        <th className="px-4 py-3">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {drivers.length === 0 ? (
+                                        <tr>
+                                            <td colSpan="4" className="px-4 py-8 text-center text-gray-400">No drivers yet. Add one to get started.</td>
+                                        </tr>
+                                    ) : (
+                                        drivers.map(driver => (
+                                            <tr key={driver._id} className="border-b hover:bg-gray-50">
+                                                <td className="px-4 py-3 font-medium text-gray-900">{driver.name}</td>
+                                                <td className="px-4 py-3">{driver.email}</td>
+                                                <td className="px-4 py-3">
+                                                    {driver.assignedBus
+                                                        ? <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-xs font-bold">Bus {driver.assignedBus.busNumber}</span>
+                                                        : <span className="text-gray-400 italic">Unassigned</span>
+                                                    }
+                                                </td>
+                                                <td className="px-4 py-3">
+                                                    <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded text-xs font-bold">Active</span>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
+
                 {view === 'map' && (
                     <div className="rounded-3xl overflow-hidden border border-surface-200 dark:border-surface-700/40 shadow-glass h-[calc(100vh-200px)] md:h-[calc(100vh-140px)]">
                         <MapComponent markers={allBusLocations} initialViewState={{ latitude: 28.6139, longitude: 77.2090, zoom: 11 }} />
@@ -204,8 +279,19 @@ const AdminDashboard = () => {
                     <div className="flex gap-3 mt-6"><button type="button" onClick={() => setShowStudentModal(false)} className="btn-secondary flex-1">Cancel</button><button type="submit" className="btn-primary flex-1">Add Student</button></div>
                 </form>
             </Modal>
-        </div>
+            <Modal show={showDriverModal} onClose={() => setShowDriverModal(false)} title="Add New Driver">
+                <p className="text-xs text-surface-400 dark:text-surface-500 mb-4">The driver will use these credentials to log in.</p>
+                {driverError && <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 p-3 rounded-xl mb-4 text-sm">{driverError}</div>}
+                <form onSubmit={handleAddDriver} className="space-y-4">
+                    <div><label className="label">Full Name</label><input type="text" required className="input" placeholder="e.g. Ravi Kumar" value={driverFormData.name} onChange={e => setDriverFormData({ ...driverFormData, name: e.target.value })} /></div>
+                    <div><label className="label">Email</label><input type="email" required className="input" placeholder="driver@example.com" value={driverFormData.email} onChange={e => setDriverFormData({ ...driverFormData, email: e.target.value })} /></div>
+                    <div><label className="label">Password</label><input type="password" required minLength={6} className="input" placeholder="Min. 6 characters" value={driverFormData.password} onChange={e => setDriverFormData({ ...driverFormData, password: e.target.value })} /></div>
+                    <div className="flex gap-3 mt-6"><button type="button" onClick={() => setShowDriverModal(false)} className="btn-secondary flex-1">Cancel</button><button type="submit" className="btn-primary flex-1">Create Driver</button></div>
+                </form>
+            </Modal>
+        </div >
     );
 };
 
 export default AdminDashboard;
+
