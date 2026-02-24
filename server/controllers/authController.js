@@ -216,22 +216,46 @@ const sendOTP = async (req, res) => {
         await OTP.deleteMany({ email });
         await OTP.create({ email, otp: hashedOtp });
 
-        // Send email
-        await transporter.sendMail({
-            from: `"KiddoTrack" <${process.env.EMAIL_USER}>`,
-            to: email,
-            subject: 'KiddoTrack — Password Reset OTP',
-            html: `
-                <div style="font-family:Arial,sans-serif;max-width:480px;margin:auto;padding:24px;border:1px solid #e5e7eb;border-radius:12px">
-                    <h2 style="color:#4f46e5;margin-bottom:8px">KiddoTrack Password Reset</h2>
-                    <p style="color:#374151">Use the OTP below to reset your password. It expires in <strong>10 minutes</strong>.</p>
-                    <div style="font-size:36px;font-weight:bold;letter-spacing:8px;text-align:center;padding:24px;background:#f0f0ff;border-radius:8px;color:#4f46e5;margin:24px 0">${otpCode}</div>
-                    <p style="color:#6b7280;font-size:13px">If you did not request this, please ignore this email.</p>
-                </div>
-            `,
-        });
+        // Check if email transporter is properly configured
+        const isEmailConfigured = process.env.EMAIL_USER && process.env.EMAIL_PASS;
 
-        res.json({ message: 'OTP sent successfully to your email.' });
+        if (isEmailConfigured) {
+            // Create transporter here to ensure latest process.env values are used
+            const dynamicTransporter = nodemailer.createTransport({
+                service: 'gmail',
+                auth: {
+                    user: process.env.EMAIL_USER,
+                    pass: process.env.EMAIL_PASS,
+                },
+            });
+
+            // Send email
+            console.log(`[MAIL] Attempting to send OTP to ${email}...`);
+            await dynamicTransporter.sendMail({
+                from: `"KiddoTrack" <${process.env.EMAIL_USER}>`,
+                to: email,
+                subject: 'KiddoTrack — Password Reset OTP',
+                html: `
+                    <div style="font-family:Arial,sans-serif;max-width:480px;margin:auto;padding:24px;border:1px solid #e5e7eb;border-radius:12px">
+                        <h2 style="color:#4f46e5;margin-bottom:8px">KiddoTrack Password Reset</h2>
+                        <p style="color:#374151">Use the OTP below to reset your password. It expires in <strong>10 minutes</strong>.</p>
+                        <div style="font-size:36px;font-weight:bold;letter-spacing:8px;text-align:center;padding:24px;background:#f0f0ff;border-radius:8px;color:#4f46e5;margin:24px 0">${otpCode}</div>
+                        <p style="color:#6b7280;font-size:13px">If you did not request this, please ignore this email.</p>
+                    </div>
+                `,
+            });
+            console.log(`[MAIL] Email sent successfully to ${email}`);
+            res.json({ message: 'OTP sent successfully to your email.' });
+        } else {
+            // Development fallback: Log OTP to console
+            console.log(`\n========================================`);
+            console.log(`[DEV MODE] OTP for ${email}: ${otpCode}`);
+            console.log(`========================================\n`);
+            res.json({
+                message: 'OTP generated! [DEV MODE] Check server console for the code.',
+                devMode: true
+            });
+        }
     } catch (error) {
         console.error('sendOTP error:', error);
         res.status(500).json({ message: 'Failed to send OTP. Please try again.' });

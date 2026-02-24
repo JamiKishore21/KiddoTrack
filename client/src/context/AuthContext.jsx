@@ -1,6 +1,7 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import axios from 'axios';
 import { googleLogout } from '@react-oauth/google';
+import { API_URL } from '../constants';
 
 const AuthContext = createContext();
 
@@ -26,7 +27,7 @@ export const AuthProvider = ({ children }) => {
                 },
             };
 
-            const { data } = await axios.post('http://localhost:5000/api/auth/login', { email, password }, config);
+            const { data } = await axios.post(`${API_URL}/auth/login`, { email, password }, config);
 
             localStorage.setItem('userInfo', JSON.stringify(data));
             setUser(data);
@@ -44,7 +45,7 @@ export const AuthProvider = ({ children }) => {
                 },
             };
 
-            const { data } = await axios.post('http://localhost:5000/api/auth/register', { name, email, password, role }, config);
+            const { data } = await axios.post(`${API_URL}/auth/register`, { name, email, password, role }, config);
 
             localStorage.setItem('userInfo', JSON.stringify(data));
             setUser(data);
@@ -62,7 +63,7 @@ export const AuthProvider = ({ children }) => {
                 },
             };
             // Verify with backend
-            const { data } = await axios.post('http://localhost:5000/api/auth/google', { token: tokenObj.credential, role }, config);
+            const { data } = await axios.post(`${API_URL}/auth/google`, { token: tokenObj.credential, role }, config);
 
             localStorage.setItem('userInfo', JSON.stringify(data));
             setUser(data);

@@ -2,11 +2,13 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import MapComponent from '../components/MapComponent';
-import { Plus, Bus, Map as MapIcon, List, UserPlus } from 'lucide-react';
+import { Plus, Bus, Map as MapIcon, Users, Route, LogOut, Radio, List, UserPlus } from 'lucide-react';
 import { socket } from '../socket';
+import ThemeToggle from '../components/ThemeToggle';
+import { API_URL } from '../constants';
 
 const AdminDashboard = () => {
-    const { user } = useAuth();
+    const { user, logout } = useAuth();
     const [view, setView] = useState('list');
     const [buses, setBuses] = useState([]);
     const [routes, setRoutes] = useState([]);
@@ -18,69 +20,24 @@ const AdminDashboard = () => {
     const [showDriverModal, setShowDriverModal] = useState(false);
     const [driverFormData, setDriverFormData] = useState({ name: '', email: '', password: '' });
     const [driverError, setDriverError] = useState('');
-    const [studentFormData, setStudentFormData] = useState({
-        name: '',
-        parentId: '',
-        busId: ''
-    });
+    const [studentFormData, setStudentFormData] = useState({ name: '', parentId: '', busId: '' });
+    const [formData, setFormData] = useState({ busNumber: '', plateNumber: '', capacity: '' });
+    const [allBusLocations, setAllBusLocations] = useState([]);
+    const [showRouteModal, setShowRouteModal] = useState(false);
+    const [routeFormData, setRouteFormData] = useState({ name: '', stops: '', assignedBus: '' });
 
-    useEffect(() => {
-        fetchBuses();
-        fetchRoutes();
-        fetchStudents();
-        fetchUsers();
-        fetchDrivers();
+    useEffect(() => { fetchBuses(); fetchRoutes(); fetchStudents(); fetchUsers(); }, []);
 
-        // ... socket logic ...
-    }, []);
-
-    const fetchStudents = async () => {
-        try {
-            const userInfo = JSON.parse(localStorage.getItem('userInfo'));
-            const token = userInfo?.token;
-
-            const { data } = await axios.get('http://localhost:5000/api/students', {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            setStudents(data);
-        } catch (error) {
-            console.error('Error fetching students:', error);
-        }
-    };
-
-    const fetchUsers = async () => {
-        try {
-            const userInfo = JSON.parse(localStorage.getItem('userInfo'));
-            const token = userInfo?.token;
-            const { data } = await axios.get('http://localhost:5000/api/auth/parents', {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            setUsers(data);
-        } catch (error) {
-            console.error('Error fetching parents:', error);
-        }
-    };
-
-    const fetchDrivers = async () => {
-        try {
-            const userInfo = JSON.parse(localStorage.getItem('userInfo'));
-            const token = userInfo?.token;
-            const { data } = await axios.get('http://localhost:5000/api/auth/drivers', {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            setDrivers(data);
-        } catch (error) {
-            console.error('Error fetching drivers:', error);
-        }
-    };
+    const fetchStudents = async () => { try { const t = JSON.parse(localStorage.getItem('userInfo'))?.token; const { data } = await axios.get(`${API_URL}/students`, { headers: { Authorization: `Bearer ${t}` } }); setStudents(data); } catch (e) { console.error(e); } };
+    const fetchUsers = async () => { try { const t = JSON.parse(localStorage.getItem('userInfo'))?.token; const { data } = await axios.get(`${API_URL}/auth/parents`, { headers: { Authorization: `Bearer ${t}` } }); setUsers(data); } catch (e) { console.error(e); } };
+    const fetchDrivers = async () => { try { const t = JSON.parse(localStorage.getItem('userInfo'))?.token; const { data } = await axios.get(`${API_URL}/auth/drivers`, { headers: { Authorization: `Bearer ${t}` } }); setDrivers(data); } catch (e) { console.error(e); } };
 
     const handleAddDriver = async (e) => {
         e.preventDefault();
         setDriverError('');
         try {
-            const userInfo = JSON.parse(localStorage.getItem('userInfo'));
-            const token = userInfo?.token;
-            await axios.post('http://localhost:5000/api/auth/create-driver', driverFormData, {
+            const token = JSON.parse(localStorage.getItem('userInfo'))?.token;
+            await axios.post(`${API_URL}/auth/create-driver`, driverFormData, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setShowDriverModal(false);
@@ -91,376 +48,152 @@ const AdminDashboard = () => {
         }
     };
 
-    const handleAddStudent = async (e) => {
-        e.preventDefault();
-        try {
-            const userInfo = JSON.parse(localStorage.getItem('userInfo'));
-            const token = userInfo?.token;
-
-            await axios.post('http://localhost:5000/api/students', studentFormData, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            setShowStudentModal(false);
-            setStudentFormData({ name: '', parentId: '', busId: '' });
-            fetchStudents();
-        } catch (error) {
-            alert(error.response?.data?.message || 'Error adding student');
-        }
-    };
-
-    // ... (render logic updates) ...
-
-    {/* Header Navigation Updates */ }
-    {/* This section was part of the old structure and is now replaced by the new return block. */ }
-    {/*
-    <div className="flex gap-4">
-        <button onClick={() => setView('list')} className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${view === 'list' ? 'bg-indigo-100 text-indigo-700 font-semibold' : 'text-gray-600 hover:bg-gray-100'}`}>
-            <List size={20} /> Buses
-        </button>
-        <button onClick={() => setView('students')} className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${view === 'students' ? 'bg-indigo-100 text-indigo-700 font-semibold' : 'text-gray-600 hover:bg-gray-100'}`}>
-            <List size={20} /> Students
-        </button>
-        {/* ... other buttons ... }
-    </div>
-    */}
-
-    {/* Student View */ }
-    {/* This section was part of the old structure and is now replaced by the new return block. */ }
-    {/*
-    {
-        view === 'students' && (
-            <div className="space-y-6">
-                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                    <div className="flex justify-between items-center mb-6">
-                        <h3 className="text-lg font-bold text-gray-800">Managed Students</h3>
-                        <button
-                            onClick={() => setShowStudentModal(true)}
-                            className="text-sm bg-indigo-50 text-indigo-600 hover:bg-indigo-100 px-3 py-1 rounded font-semibold transition-colors"
-                        >
-                            + Add Student
-                        </button>
-                    </div>
-                    <table className="w-full text-left text-sm text-gray-600">
-                        <thead className="bg-gray-50 text-gray-700 uppercase font-bold text-xs">
-                            <tr>
-                                <th className="px-4 py-3">Student Name</th>
-                                <th className="px-4 py-3">Parent</th>
-                                <th className="px-4 py-3">Assigned Bus</th>
-                                <th className="px-4 py-3 text-right">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {students.map(student => (
-                                <tr key={student._id} className="border-b hover:bg-gray-50">
-                                    <td className="px-4 py-3 font-medium text-gray-900">{student.name}</td>
-                                    <td className="px-4 py-3">{student.parent?.name || 'N/A'}</td>
-                                    <td className="px-4 py-3">
-                                        {student.bus ? `Bus ${student.bus.busNumber}` : 'Unassigned'}
-                                    </td>
-                                    <td className="px-4 py-3 text-right">Edit</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        )
-    }
-    */}
-    const [formData, setFormData] = useState({
-        busNumber: '',
-        plateNumber: '',
-        capacity: ''
-    });
-
-    const [allBusLocations, setAllBusLocations] = useState([]);
-    const [showRouteModal, setShowRouteModal] = useState(false);
-    const [routeFormData, setRouteFormData] = useState({
-        name: '',
-        stops: '', // comma separated for MVP
-        assignedBus: ''
-    });
+    const handleAddStudent = async (e) => { e.preventDefault(); try { const t = JSON.parse(localStorage.getItem('userInfo'))?.token; await axios.post(`${API_URL}/students`, studentFormData, { headers: { Authorization: `Bearer ${t}` } }); setShowStudentModal(false); setStudentFormData({ name: '', parentId: '', busId: '' }); fetchStudents(); } catch (e) { alert(e.response?.data?.message || 'Error'); } };
 
     useEffect(() => {
-        fetchBuses();
-        fetchRoutes();
-
-        // 1. SETUP LISTENERS FIRST (To avoid missing events)
-        socket.on('busLocationUpdate', (data) => {
-            console.log("Admin received bus update:", data);
-            setAllBusLocations(prev => {
-                const index = prev.findIndex(b => String(b.busId) === String(data.busId));
-                if (index > -1) {
-                    const newLocs = [...prev];
-                    newLocs[index] = { ...newLocs[index], ...data };
-                    return newLocs;
-                } else {
-                    return [...prev, data];
-                }
-            });
-        });
-
-        socket.on('activeBusList', (list) => {
-            console.log("Admin received Initial Sync:", list);
-            setAllBusLocations(prev => {
-                const map = {};
-                prev.forEach(p => map[p.busId] = p);
-                list.forEach(p => map[p.busId] = p);
-                return Object.values(map);
-            });
-        });
-
-        socket.on('busSessionEnded', (data) => {
-            setAllBusLocations(prev => prev.filter(b => b.busId !== data.busId));
-        });
-
-        // 2. DEFINE JOIN LOGIC
-        const joinAdminRoom = () => {
-            console.log("Joined Admin Room");
-            socket.emit('joinRoom', 'admin_room');
-        };
-        socket.on('connect', joinAdminRoom);
-
-        // 3. TRIGGER CONNECTION / JOIN
-        if (!socket.connected) {
-            socket.connect();
-        } else {
-            // If already connected, manual join because 'connect' event won't fire again
-            joinAdminRoom();
-        }
-
-        // CLEANUP
-        return () => {
-            socket.off('connect', joinAdminRoom);
-            socket.off('busLocationUpdate');
-            socket.off('activeBusList');
-            socket.off('busSessionEnded');
-            socket.disconnect();
-        }
+        fetchBuses(); fetchRoutes(); fetchStudents(); fetchUsers(); fetchDrivers();
+        socket.on('busLocationUpdate', (d) => { setAllBusLocations(prev => { const i = prev.findIndex(b => String(b.busId) === String(d.busId)); if (i > -1) { const n = [...prev]; n[i] = { ...n[i], ...d }; return n; } return [...prev, d]; }); });
+        socket.on('activeBusList', (l) => { setAllBusLocations(prev => { const m = {}; prev.forEach(p => m[p.busId] = p); l.forEach(p => m[p.busId] = p); return Object.values(m); }); });
+        socket.on('busSessionEnded', (d) => { setAllBusLocations(prev => prev.filter(b => b.busId !== d.busId)); });
+        const join = () => socket.emit('joinRoom', 'admin_room');
+        socket.on('connect', join); if (!socket.connected) socket.connect(); else join();
+        return () => { socket.off('connect', join); socket.off('busLocationUpdate'); socket.off('activeBusList'); socket.off('busSessionEnded'); socket.disconnect(); };
     }, []);
 
-    const fetchBuses = async () => {
-        try {
-            const { data } = await axios.get('http://localhost:5000/api/buses');
-            setBuses(data);
-        } catch (error) {
-            console.error('Error fetching buses:', error);
-        }
-    };
+    const fetchBuses = async () => { try { const { data } = await axios.get(`${API_URL}/buses`); setBuses(data); } catch (e) { console.error(e); } };
+    const fetchRoutes = async () => { try { const { data } = await axios.get(`${API_URL}/routes`); setRoutes(data); } catch (e) { console.error(e); } };
+    const handleAddBus = async (e) => { e.preventDefault(); try { await axios.post(`${API_URL}/buses`, formData); setShowAddModal(false); setFormData({ busNumber: '', plateNumber: '', capacity: '' }); fetchBuses(); } catch (e) { alert(e.response?.data?.message || 'Error'); } };
+    const handleAddRoute = async (e) => { e.preventDefault(); try { await axios.post(`${API_URL}/routes`, { name: routeFormData.name, stops: routeFormData.stops.split(',').map(s => ({ name: s.trim() })), assignedBus: routeFormData.assignedBus || null }); setShowRouteModal(false); setRouteFormData({ name: '', stops: '', assignedBus: '' }); fetchRoutes(); } catch (e) { alert(e.response?.data?.message || 'Error'); } };
 
-    const fetchRoutes = async () => {
-        try {
-            const { data } = await axios.get('http://localhost:5000/api/routes');
-            setRoutes(data);
-        } catch (error) {
-            console.error('Error fetching routes:', error);
-        }
-    };
+    const navItems = [
+        { id: 'list', label: 'Buses', icon: Bus },
+        { id: 'routes', label: 'Routes', icon: Route },
+        { id: 'students', label: 'Students', icon: Users },
+        { id: 'drivers', label: 'Drivers', icon: UserPlus },
+        { id: 'map', label: 'Live Map', icon: MapIcon },
+    ];
 
-    const handleAddBus = async (e) => {
-        e.preventDefault();
-        try {
-            await axios.post('http://localhost:5000/api/buses', formData);
-            setShowAddModal(false);
-            setFormData({ busNumber: '', plateNumber: '', capacity: '' });
-            fetchBuses();
-        } catch (error) {
-            alert(error.response?.data?.message || 'Error adding bus');
-        }
-    };
-
-    const handleAddRoute = async (e) => {
-        e.preventDefault();
-        try {
-            // Convert comma separated stops to array of objects
-            const stopsArray = routeFormData.stops.split(',').map(s => ({ name: s.trim() }));
-
-            await axios.post('http://localhost:5000/api/routes', {
-                name: routeFormData.name,
-                stops: stopsArray,
-                assignedBus: routeFormData.assignedBus || null
-            });
-
-            setShowRouteModal(false);
-            setRouteFormData({ name: '', stops: '', assignedBus: '' });
-            fetchRoutes();
-        } catch (error) {
-            alert(error.response?.data?.message || 'Error adding route');
-        }
+    const Modal = ({ show, onClose, title, children }) => {
+        if (!show) return null;
+        return (
+            <div className="fixed inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 animate-fade-in" onClick={onClose}>
+                <div className="bg-white dark:bg-surface-800 rounded-t-3xl sm:rounded-3xl p-6 w-full sm:max-w-md shadow-glass-lg border border-surface-200 dark:border-surface-700/50 animate-slide-up" onClick={e => e.stopPropagation()}>
+                    <h2 className="text-xl font-bold text-surface-900 dark:text-white mb-5">{title}</h2>
+                    {children}
+                </div>
+            </div>
+        );
     };
 
     return (
-        <div className="min-h-screen bg-gray-50 flex flex-col">
-            {/* Header */}
-            <header className="bg-white shadow px-6 py-4 flex justify-between items-center z-10">
-                <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-                    <span className="text-indigo-600">Admin</span> Dashboard
-                </h1>
-                <div className="flex gap-4">
-                    <button onClick={() => setView('list')} className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${view === 'list' ? 'bg-indigo-100 text-indigo-700 font-semibold' : 'text-gray-600 hover:bg-gray-100'}`}>
-                        <List size={20} /> Buses
-                    </button>
-                    <button onClick={() => setView('routes')} className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${view === 'routes' ? 'bg-indigo-100 text-indigo-700 font-semibold' : 'text-gray-600 hover:bg-gray-100'}`}>
-                        <List size={20} /> Routes
-                    </button>
-                    <button onClick={() => setView('students')} className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${view === 'students' ? 'bg-indigo-100 text-indigo-700 font-semibold' : 'text-gray-600 hover:bg-gray-100'}`}>
-                        <List size={20} /> Students
-                    </button>
-                    <button onClick={() => setView('drivers')} className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${view === 'drivers' ? 'bg-indigo-100 text-indigo-700 font-semibold' : 'text-gray-600 hover:bg-gray-100'}`}>
-                        <UserPlus size={20} /> Drivers
-                    </button>
-                    <button onClick={() => setView('map')} className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${view === 'map' ? 'bg-indigo-100 text-indigo-700 font-semibold' : 'text-gray-600 hover:bg-gray-100'}`}>
-                        <MapIcon size={20} /> Live Map
-                    </button>
-                    <button onClick={() => setShowAddModal(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors shadow-lg shadow-indigo-200">
-                        <Plus size={20} /> Add Bus
-                    </button>
+        <div className="h-screen-safe flex flex-col bg-surface-50 dark:bg-surface-950">
+            <header className="bg-white dark:bg-surface-800 border-b border-surface-200 dark:border-surface-700/50 px-4 sm:px-6 py-3 flex justify-between items-center z-20 flex-shrink-0">
+                <div className="flex items-center gap-2 sm:gap-3">
+                    <h1 className="text-lg sm:text-xl font-bold">
+                        <span className="text-gradient">Admin</span>
+                        <span className="text-surface-900 dark:text-white"> Dashboard</span>
+                    </h1>
+                    <span className="badge badge-success"><Radio size={10} className={allBusLocations.length > 0 ? 'animate-pulse' : ''} /> {allBusLocations.length} Live</span>
+                </div>
+                <div className="hidden md:flex gap-1.5 items-center">
+                    {navItems.map(item => (
+                        <button key={item.id} onClick={() => setView(item.id)}
+                            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium transition-all ${view === item.id ? 'bg-brand-100 dark:bg-brand-900/30 text-brand-700 dark:text-brand-400' : 'text-surface-500 dark:text-surface-400 hover:bg-surface-100 dark:hover:bg-surface-700'}`}>
+                            <item.icon size={16} /> {item.label}
+                        </button>
+                    ))}
+                    <button onClick={() => setShowAddModal(true)} className="btn-primary py-2 px-3 text-sm ml-1 flex items-center gap-1"><Plus size={16} /> Add Bus</button>
+                    <ThemeToggle className="ml-1" />
+                    <button onClick={logout} className="btn-ghost p-2 ml-0.5"><LogOut size={18} /></button>
+                </div>
+                <div className="flex items-center gap-1.5 md:hidden">
+                    <button onClick={() => setShowAddModal(true)} className="btn-primary p-2"><Plus size={18} /></button>
+                    <ThemeToggle />
+                    <button onClick={logout} className="btn-ghost p-2"><LogOut size={18} /></button>
                 </div>
             </header>
 
-            {/* Content */}
-            <main className="flex-1 p-6 overflow-hidden relative">
-                {/* Debug Info Overlay */}
-                <div className="absolute bottom-4 left-4 z-20 bg-black/80 text-white p-4 rounded-lg text-xs font-mono max-w-sm pointer-events-none">
-                    <p className="font-bold text-yellow-400 mb-1">DEBUG MONITOR</p>
-                    <p>Bus Count: {allBusLocations.length}</p>
-                    <p>Last Update: {new Date().toLocaleTimeString()}</p>
-                    <div className="mt-2 border-t border-gray-600 pt-2">
-                        {allBusLocations.length === 0 ? (
-                            <p className="text-gray-400">Waiting for driver data...</p>
-                        ) : (
-                            allBusLocations.map(b => (
-                                <p key={b.busId}>Bus {b.busId}: {b.lat.toFixed(4)}, {b.lng.toFixed(4)}</p>
-                            ))
-                        )}
-                    </div>
-                </div>
+            <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-surface-800 border-t border-surface-200 dark:border-surface-700/50 z-30 flex">
+                {navItems.map(item => (
+                    <button key={item.id} onClick={() => setView(item.id)}
+                        className={`flex-1 flex flex-col items-center gap-0.5 py-2.5 transition-colors ${view === item.id ? 'text-brand-500 dark:text-brand-400' : 'text-surface-400 dark:text-surface-500'}`}>
+                        <item.icon size={20} /><span className="text-[10px] font-medium">{item.label}</span>
+                    </button>
+                ))}
+            </nav>
 
+            <main className="flex-1 overflow-auto p-3 sm:p-6 pb-20 md:pb-6">
                 {view === 'list' && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                         {buses.map(bus => (
-                            <div key={bus._id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition-shadow">
-                                <div className="flex justify-between items-start mb-4">
+                            <div key={bus._id} className="card p-4 sm:p-5">
+                                <div className="flex justify-between items-start mb-3">
                                     <div>
-                                        <h3 className="text-lg font-bold text-gray-800">Bus {bus.busNumber}</h3>
-                                        <p className="text-sm text-gray-500">{bus.plateNumber}</p>
+                                        <h3 className="text-base sm:text-lg font-bold text-surface-900 dark:text-white">Bus {bus.busNumber}</h3>
+                                        <p className="text-xs text-surface-400 font-mono">{bus.plateNumber}</p>
                                     </div>
-                                    <span className={`px-2 py-1 rounded text-xs font-bold ${bus.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
-                                        {bus.status.toUpperCase()}
-                                    </span>
+                                    <span className={bus.status === 'active' ? 'badge badge-success' : 'badge badge-neutral'}>{bus.status.toUpperCase()}</span>
                                 </div>
-                                <div className="space-y-2 text-sm text-gray-600">
-                                    <div className="flex justify-between">
-                                        <span>Capacity:</span>
-                                        <span className="font-medium text-gray-900">{bus.capacity}</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <span>Driver:</span>
-                                        <span className="font-medium text-gray-900">{bus.driver?.name || 'Unassigned'}</span>
-                                    </div>
+                                <div className="space-y-2 text-sm">
+                                    <div className="flex justify-between text-surface-500 dark:text-surface-400"><span>Capacity</span><span className="font-semibold text-surface-800 dark:text-surface-200">{bus.capacity}</span></div>
+                                    <div className="flex justify-between text-surface-500 dark:text-surface-400"><span>Driver</span><span className="font-semibold text-surface-800 dark:text-surface-200 truncate ml-2">{bus.driver?.name || 'Unassigned'}</span></div>
                                 </div>
                             </div>
                         ))}
-                        {buses.length === 0 && (
-                            <div className="col-span-full py-12 text-center text-gray-400">
-                                <Bus size={48} className="mx-auto mb-4 opacity-20" />
-                                <p>No buses found. Add one to get started.</p>
-                            </div>
-                        )}
+                        {buses.length === 0 && <div className="col-span-full py-16 text-center"><Bus size={48} className="mx-auto mb-4 text-surface-300 dark:text-surface-600" /><p className="text-surface-400">No buses. Add one to start.</p></div>}
                     </div>
                 )}
 
                 {view === 'routes' && (
-                    <div className="space-y-6">
-                        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                            <div className="flex justify-between items-center mb-6">
-                                <h3 className="text-lg font-bold text-gray-800">Managed Routes</h3>
-                                <button
-                                    onClick={() => setShowRouteModal(true)}
-                                    className="text-sm bg-indigo-50 text-indigo-600 hover:bg-indigo-100 px-3 py-1 rounded font-semibold transition-colors"
-                                >
-                                    + Create Route
-                                </button>
-                            </div>
-                            <table className="w-full text-left text-sm text-gray-600">
-                                <thead className="bg-gray-50 text-gray-700 uppercase font-bold text-xs">
-                                    <tr>
-                                        <th className="px-4 py-3">Route Name</th>
-                                        <th className="px-4 py-3">Stops</th>
-                                        <th className="px-4 py-3">Assigned Bus</th>
-                                        <th className="px-4 py-3 text-right">Actions</th>
-                                    </tr>
-                                </thead>
+                    <div className="card p-4 sm:p-6">
+                        <div className="flex justify-between items-center mb-5"><h3 className="section-title">Routes</h3><button onClick={() => setShowRouteModal(true)} className="btn-secondary py-2 text-sm">+ Create Route</button></div>
+                        <div className="hidden sm:block overflow-x-auto">
+                            <table className="w-full text-left text-sm">
+                                <thead><tr className="border-b border-surface-200 dark:border-surface-700/40"><th className="px-4 py-3 text-xs font-bold text-surface-400 uppercase">Route</th><th className="px-4 py-3 text-xs font-bold text-surface-400 uppercase">Stops</th><th className="px-4 py-3 text-xs font-bold text-surface-400 uppercase">Bus</th><th className="px-4 py-3 text-xs font-bold text-surface-400 uppercase text-right">Actions</th></tr></thead>
                                 <tbody>
-                                    {routes.length === 0 ? (
-                                        <tr>
-                                            <td colSpan="4" className="px-4 py-8 text-center text-gray-400">No routes created yet.</td>
-                                        </tr>
-                                    ) : (
-                                        routes.map(route => (
-                                            <tr key={route._id} className="border-b hover:bg-gray-50">
-                                                <td className="px-4 py-3 font-medium text-gray-900">{route.name}</td>
-                                                <td className="px-4 py-3">{route.stops?.length || 0} Stops</td>
-                                                <td className="px-4 py-3">
-                                                    {route.assignedBus ? (
-                                                        <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-xs font-bold">
-                                                            BUS-{route.assignedBus.busNumber}
-                                                        </span>
-                                                    ) : (
-                                                        <span className="text-gray-400 italic">Unassigned</span>
-                                                    )}
-                                                </td>
-                                                <td className="px-4 py-3 text-right text-indigo-600 hover:underline cursor-pointer">Edit</td>
+                                    {routes.length === 0 ? <tr><td colSpan="4" className="px-4 py-8 text-center text-surface-400">No routes yet.</td></tr>
+                                        : routes.map(r => (
+                                            <tr key={r._id} className="border-b border-surface-100 dark:border-surface-700/30 hover:bg-surface-50 dark:hover:bg-surface-700/20 transition-colors">
+                                                <td className="px-4 py-3 font-semibold text-surface-900 dark:text-surface-100">{r.name}</td>
+                                                <td className="px-4 py-3 text-surface-500 dark:text-surface-400">{r.stops?.length || 0}</td>
+                                                <td className="px-4 py-3">{r.assignedBus ? <span className="badge badge-info">BUS-{r.assignedBus.busNumber}</span> : <span className="text-surface-400 text-xs">—</span>}</td>
+                                                <td className="px-4 py-3 text-right"><button className="text-brand-500 dark:text-brand-400 hover:underline text-xs font-medium">Edit</button></td>
                                             </tr>
-                                        ))
-                                    )}
+                                        ))}
                                 </tbody>
                             </table>
                         </div>
+                        <div className="sm:hidden space-y-2">{routes.length === 0 ? <p className="text-center text-surface-400 py-8 text-sm">No routes.</p> : routes.map(r => (
+                            <div key={r._id} className="bg-surface-50 dark:bg-surface-900 rounded-2xl p-3 border border-surface-200 dark:border-surface-700/40">
+                                <div className="flex justify-between items-start mb-1"><h4 className="font-bold text-surface-800 dark:text-surface-200 text-sm">{r.name}</h4>{r.assignedBus ? <span className="badge badge-info text-[10px]">BUS-{r.assignedBus.busNumber}</span> : <span className="text-surface-400 text-xs">—</span>}</div>
+                                <p className="text-xs text-surface-400">{r.stops?.length || 0} Stops</p>
+                            </div>
+                        ))}</div>
                     </div>
                 )}
 
                 {view === 'students' && (
-                    <div className="space-y-6">
-                        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                            <div className="flex justify-between items-center mb-6">
-                                <h3 className="text-lg font-bold text-gray-800">Managed Students</h3>
-                                <button
-                                    onClick={() => setShowStudentModal(true)}
-                                    className="text-sm bg-indigo-50 text-indigo-600 hover:bg-indigo-100 px-3 py-1 rounded font-semibold transition-colors"
-                                >
-                                    + Add Student
-                                </button>
-                            </div>
-                            <table className="w-full text-left text-sm text-gray-600">
-                                <thead className="bg-gray-50 text-gray-700 uppercase font-bold text-xs">
-                                    <tr>
-                                        <th className="px-4 py-3">Student Name</th>
-                                        <th className="px-4 py-3">Parent</th>
-                                        <th className="px-4 py-3">Assigned Bus</th>
-                                        <th className="px-4 py-3 text-right">Actions</th>
+                    <div className="card p-4 sm:p-6">
+                        <div className="flex justify-between items-center mb-5"><h3 className="section-title">Students</h3><button onClick={() => setShowStudentModal(true)} className="btn-secondary py-2 text-sm">+ Add Student</button></div>
+                        <div className="hidden sm:block overflow-x-auto">
+                            <table className="w-full text-left text-sm">
+                                <thead><tr className="border-b border-surface-200 dark:border-surface-700/40"><th className="px-4 py-3 text-xs font-bold text-surface-400 uppercase">Student</th><th className="px-4 py-3 text-xs font-bold text-surface-400 uppercase">Parent</th><th className="px-4 py-3 text-xs font-bold text-surface-400 uppercase">Bus</th><th className="px-4 py-3 text-xs font-bold text-surface-400 uppercase text-right">Actions</th></tr></thead>
+                                <tbody>{students.length === 0 ? <tr><td colSpan="4" className="px-4 py-8 text-center text-surface-400">No students.</td></tr> : students.map(s => (
+                                    <tr key={s._id} className="border-b border-surface-100 dark:border-surface-700/30 hover:bg-surface-50 dark:hover:bg-surface-700/20 transition-colors">
+                                        <td className="px-4 py-3 font-semibold text-surface-900 dark:text-surface-100">{s.name}</td><td className="px-4 py-3 text-surface-500 dark:text-surface-400">{s.parent?.name || 'N/A'}</td>
+                                        <td className="px-4 py-3">{s.bus ? <span className="badge badge-info">Bus {s.bus.busNumber}</span> : <span className="text-surface-400 text-xs">None</span>}</td>
+                                        <td className="px-4 py-3 text-right"><button className="text-brand-500 dark:text-brand-400 hover:underline text-xs font-medium">Edit</button></td>
                                     </tr>
-                                </thead>
-                                <tbody>
-                                    {students.length === 0 ? (
-                                        <tr>
-                                            <td colSpan="4" className="px-4 py-8 text-center text-gray-400">No students added yet.</td>
-                                        </tr>
-                                    ) : (
-                                        students.map(student => (
-                                            <tr key={student._id} className="border-b hover:bg-gray-50">
-                                                <td className="px-4 py-3 font-medium text-gray-900">{student.name}</td>
-                                                <td className="px-4 py-3">{student.parent?.name || 'N/A'}</td>
-                                                <td className="px-4 py-3">
-                                                    {student.bus ? `Bus ${student.bus.busNumber}` : 'Unassigned'}
-                                                </td>
-                                                <td className="px-4 py-3 text-right">Edit</td>
-                                            </tr>
-                                        ))
-                                    )}
-                                </tbody>
+                                ))}</tbody>
                             </table>
                         </div>
+                        <div className="sm:hidden space-y-2">{students.length === 0 ? <p className="text-center text-surface-400 py-8 text-sm">No students.</p> : students.map(s => (
+                            <div key={s._id} className="bg-surface-50 dark:bg-surface-900 rounded-2xl p-3 border border-surface-200 dark:border-surface-700/40 flex items-center gap-3">
+                                <div className="bg-brand-100 dark:bg-brand-900/30 p-2 rounded-xl"><Users size={16} className="text-brand-600 dark:text-brand-400" /></div>
+                                <div className="flex-1 min-w-0"><h4 className="font-bold text-surface-800 dark:text-surface-200 text-sm truncate">{s.name}</h4><p className="text-xs text-surface-400 truncate">{s.parent?.name || 'N/A'}</p></div>
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${s.bus ? 'bg-brand-100 dark:bg-brand-900/30 text-brand-700 dark:text-brand-400' : 'bg-surface-200 dark:bg-surface-700 text-surface-500'}`}>{s.bus ? `Bus ${s.bus.busNumber}` : 'None'}</span>
+                            </div>
+                        ))}</div>
                     </div>
                 )}
 
@@ -517,158 +250,47 @@ const AdminDashboard = () => {
                 )}
 
                 {view === 'map' && (
-                    <div className="absolute inset-0 bg-gray-200 m-6 rounded-2xl overflow-hidden shadow-inner border border-gray-300">
-                        <MapComponent
-                            markers={allBusLocations}
-                            initialViewState={{ latitude: 28.6139, longitude: 77.2090, zoom: 11 }}
-                        />
+                    <div className="rounded-3xl overflow-hidden border border-surface-200 dark:border-surface-700/40 shadow-glass h-[calc(100vh-200px)] md:h-[calc(100vh-140px)]">
+                        <MapComponent markers={allBusLocations} initialViewState={{ latitude: 28.6139, longitude: 77.2090, zoom: 11 }} />
                     </div>
                 )}
             </main>
 
-            {/* Add Bus Modal */}
-            {showAddModal && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-in fade-in duration-200">
-                    <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl scale-100">
-                        <h2 className="text-xl font-bold mb-4">Add New Bus</h2>
-                        <form onSubmit={handleAddBus} className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Bus Number</label>
-                                <input type="text" required className="w-full border rounded-lg px-3 py-2" placeholder="e.g. 101" value={formData.busNumber} onChange={e => setFormData({ ...formData, busNumber: e.target.value })} />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">License Plate</label>
-                                <input type="text" required className="w-full border rounded-lg px-3 py-2" placeholder="e.g. DL-1C-2024" value={formData.plateNumber} onChange={e => setFormData({ ...formData, plateNumber: e.target.value })} />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Capacity</label>
-                                <input type="number" required className="w-full border rounded-lg px-3 py-2" placeholder="e.g. 40" value={formData.capacity} onChange={e => setFormData({ ...formData, capacity: e.target.value })} />
-                            </div>
-                            <div className="flex gap-3 mt-6">
-                                <button type="button" onClick={() => setShowAddModal(false)} className="flex-1 py-2 text-gray-600 hover:bg-gray-50 rounded-lg">Cancel</button>
-                                <button type="submit" className="flex-1 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Save Bus</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
-
-            {/* Add Route Modal */}
-            {showRouteModal && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-in fade-in duration-200">
-                    <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl scale-100">
-                        <h2 className="text-xl font-bold mb-4">Create New Route</h2>
-                        <form onSubmit={handleAddRoute} className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Route Name</label>
-                                <input
-                                    type="text"
-                                    required
-                                    className="w-full border rounded-lg px-3 py-2"
-                                    placeholder="e.g. School to Downtown"
-                                    value={routeFormData.name}
-                                    onChange={e => setRouteFormData({ ...routeFormData, name: e.target.value })}
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Stops (comma separated)</label>
-                                <textarea
-                                    className="w-full border rounded-lg px-3 py-2"
-                                    placeholder="e.g. Stop A, Stop B, Stop C"
-                                    rows="3"
-                                    value={routeFormData.stops}
-                                    onChange={e => setRouteFormData({ ...routeFormData, stops: e.target.value })}
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Assign Bus</label>
-                                <select
-                                    className="w-full border rounded-lg px-3 py-2"
-                                    value={routeFormData.assignedBus}
-                                    onChange={e => setRouteFormData({ ...routeFormData, assignedBus: e.target.value })}
-                                >
-                                    <option value="">-- No Bus Assigned --</option>
-                                    {buses.map(bus => (
-                                        <option key={bus._id} value={bus._id}>Bus {bus.busNumber} ({bus.plateNumber})</option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div className="flex gap-3 mt-6">
-                                <button type="button" onClick={() => setShowRouteModal(false)} className="flex-1 py-2 text-gray-600 hover:bg-gray-50 rounded-lg">Cancel</button>
-                                <button type="submit" className="flex-1 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Create Route</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
-
-            {/* Add Student Modal */}
-            {showStudentModal && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-in fade-in duration-200">
-                    <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl scale-100">
-                        <h2 className="text-xl font-bold mb-4">Add New Student</h2>
-                        <form onSubmit={handleAddStudent} className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Student Name</label>
-                                <input type="text" required className="w-full border rounded-lg px-3 py-2" placeholder="e.g. John Doe" value={studentFormData.name} onChange={e => setStudentFormData({ ...studentFormData, name: e.target.value })} />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Parent</label>
-                                <select required className="w-full border rounded-lg px-3 py-2" value={studentFormData.parentId} onChange={e => setStudentFormData({ ...studentFormData, parentId: e.target.value })}>
-                                    <option value="">Select Parent</option>
-                                    {users.map(user => (
-                                        <option key={user._id} value={user._id}>{user.name} ({user.email})</option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Assign Bus</label>
-                                <select required className="w-full border rounded-lg px-3 py-2" value={studentFormData.busId} onChange={e => setStudentFormData({ ...studentFormData, busId: e.target.value })}>
-                                    <option value="">Select Bus</option>
-                                    {buses.map(bus => (
-                                        <option key={bus._id} value={bus._id}>Bus {bus.busNumber} ({bus.plateNumber})</option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div className="flex gap-3 mt-6">
-                                <button type="button" onClick={() => setShowStudentModal(false)} className="flex-1 py-2 text-gray-600 hover:bg-gray-50 rounded-lg">Cancel</button>
-                                <button type="submit" className="flex-1 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Add Student</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
-            {/* Add Driver Modal */}
-            {showDriverModal && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-in fade-in duration-200">
-                    <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl">
-                        <h2 className="text-xl font-bold mb-1">Add New Driver</h2>
-                        <p className="text-xs text-gray-400 mb-4">The driver will use these credentials to log in.</p>
-                        {driverError && (
-                            <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-lg mb-4 text-sm">{driverError}</div>
-                        )}
-                        <form onSubmit={handleAddDriver} className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-                                <input type="text" required className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none" placeholder="e.g. Ravi Kumar" value={driverFormData.name} onChange={e => setDriverFormData({ ...driverFormData, name: e.target.value })} />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                                <input type="email" required className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none" placeholder="driver@example.com" value={driverFormData.email} onChange={e => setDriverFormData({ ...driverFormData, email: e.target.value })} />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-                                <input type="password" required minLength={6} className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none" placeholder="Min. 6 characters" value={driverFormData.password} onChange={e => setDriverFormData({ ...driverFormData, password: e.target.value })} />
-                            </div>
-                            <div className="flex gap-3 mt-6">
-                                <button type="button" onClick={() => setShowDriverModal(false)} className="flex-1 py-2 text-gray-600 hover:bg-gray-50 rounded-lg border">Cancel</button>
-                                <button type="submit" className="flex-1 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Create Driver</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
-        </div>
+            <Modal show={showAddModal} onClose={() => setShowAddModal(false)} title="Add New Bus">
+                <form onSubmit={handleAddBus} className="space-y-4">
+                    <div><label className="label">Bus Number</label><input type="text" required className="input" placeholder="e.g. 101" value={formData.busNumber} onChange={e => setFormData({ ...formData, busNumber: e.target.value })} /></div>
+                    <div><label className="label">License Plate</label><input type="text" required className="input" placeholder="e.g. DL-1C-2024" value={formData.plateNumber} onChange={e => setFormData({ ...formData, plateNumber: e.target.value })} /></div>
+                    <div><label className="label">Capacity</label><input type="number" required className="input" placeholder="e.g. 40" value={formData.capacity} onChange={e => setFormData({ ...formData, capacity: e.target.value })} /></div>
+                    <div className="flex gap-3 mt-6"><button type="button" onClick={() => setShowAddModal(false)} className="btn-secondary flex-1">Cancel</button><button type="submit" className="btn-primary flex-1">Save Bus</button></div>
+                </form>
+            </Modal>
+            <Modal show={showRouteModal} onClose={() => setShowRouteModal(false)} title="Create Route">
+                <form onSubmit={handleAddRoute} className="space-y-4">
+                    <div><label className="label">Route Name</label><input type="text" required className="input" placeholder="School to Downtown" value={routeFormData.name} onChange={e => setRouteFormData({ ...routeFormData, name: e.target.value })} /></div>
+                    <div><label className="label">Stops (comma separated)</label><textarea className="input" placeholder="Stop A, Stop B, Stop C" rows="3" value={routeFormData.stops} onChange={e => setRouteFormData({ ...routeFormData, stops: e.target.value })} /></div>
+                    <div><label className="label">Assign Bus</label><select className="input" value={routeFormData.assignedBus} onChange={e => setRouteFormData({ ...routeFormData, assignedBus: e.target.value })}><option value="">-- No Bus --</option>{buses.map(b => <option key={b._id} value={b._id}>Bus {b.busNumber} ({b.plateNumber})</option>)}</select></div>
+                    <div className="flex gap-3 mt-6"><button type="button" onClick={() => setShowRouteModal(false)} className="btn-secondary flex-1">Cancel</button><button type="submit" className="btn-primary flex-1">Create</button></div>
+                </form>
+            </Modal>
+            <Modal show={showStudentModal} onClose={() => setShowStudentModal(false)} title="Add Student">
+                <form onSubmit={handleAddStudent} className="space-y-4">
+                    <div><label className="label">Student Name</label><input type="text" required className="input" placeholder="John Doe" value={studentFormData.name} onChange={e => setStudentFormData({ ...studentFormData, name: e.target.value })} /></div>
+                    <div><label className="label">Parent</label><select required className="input" value={studentFormData.parentId} onChange={e => setStudentFormData({ ...studentFormData, parentId: e.target.value })}><option value="">Select Parent</option>{users.map(u => <option key={u._id} value={u._id}>{u.name} ({u.email})</option>)}</select></div>
+                    <div><label className="label">Assign Bus</label><select required className="input" value={studentFormData.busId} onChange={e => setStudentFormData({ ...studentFormData, busId: e.target.value })}><option value="">Select Bus</option>{buses.map(b => <option key={b._id} value={b._id}>Bus {b.busNumber} ({b.plateNumber})</option>)}</select></div>
+                    <div className="flex gap-3 mt-6"><button type="button" onClick={() => setShowStudentModal(false)} className="btn-secondary flex-1">Cancel</button><button type="submit" className="btn-primary flex-1">Add Student</button></div>
+                </form>
+            </Modal>
+            <Modal show={showDriverModal} onClose={() => setShowDriverModal(false)} title="Add New Driver">
+                <p className="text-xs text-surface-400 dark:text-surface-500 mb-4">The driver will use these credentials to log in.</p>
+                {driverError && <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 p-3 rounded-xl mb-4 text-sm">{driverError}</div>}
+                <form onSubmit={handleAddDriver} className="space-y-4">
+                    <div><label className="label">Full Name</label><input type="text" required className="input" placeholder="e.g. Ravi Kumar" value={driverFormData.name} onChange={e => setDriverFormData({ ...driverFormData, name: e.target.value })} /></div>
+                    <div><label className="label">Email</label><input type="email" required className="input" placeholder="driver@example.com" value={driverFormData.email} onChange={e => setDriverFormData({ ...driverFormData, email: e.target.value })} /></div>
+                    <div><label className="label">Password</label><input type="password" required minLength={6} className="input" placeholder="Min. 6 characters" value={driverFormData.password} onChange={e => setDriverFormData({ ...driverFormData, password: e.target.value })} /></div>
+                    <div className="flex gap-3 mt-6"><button type="button" onClick={() => setShowDriverModal(false)} className="btn-secondary flex-1">Cancel</button><button type="submit" className="btn-primary flex-1">Create Driver</button></div>
+                </form>
+            </Modal>
+        </div >
     );
 };
 

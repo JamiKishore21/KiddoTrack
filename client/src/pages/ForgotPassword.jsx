@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Mail, KeyRound, Lock, CheckCircle, ArrowLeft, Eye, EyeOff } from 'lucide-react';
+import { Mail, KeyRound, Lock, CheckCircle, ArrowLeft, Eye, EyeOff, ChevronDown } from 'lucide-react';
+import { API_URL } from '../constants';
 
 const STEPS = ['email', 'otp', 'password', 'done'];
 
@@ -17,7 +18,16 @@ const ForgotPassword = () => {
     const [error, setError] = useState('');
     const [successMsg, setSuccessMsg] = useState('');
 
-    const API = 'http://localhost:5000/api/auth';
+    const API = `${API_URL}/auth`;
+
+    // Helper to handle fetch responses
+    const handleResponse = async (res) => {
+        const contentType = res.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+            return await res.json();
+        }
+        throw new Error(`Server Error: ${res.status} ${res.statusText}`);
+    };
 
     // Step 1 — Send OTP
     const handleSendOTP = async (e) => {
@@ -30,8 +40,8 @@ const ForgotPassword = () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email }),
             });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.message);
+            const data = await handleResponse(res);
+            if (!res.ok) throw new Error(data.message || 'Failed to send OTP');
             setSuccessMsg(data.message);
             setStep('otp');
         } catch (err) {
@@ -52,8 +62,8 @@ const ForgotPassword = () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, otp }),
             });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.message);
+            const data = await handleResponse(res);
+            if (!res.ok) throw new Error(data.message || 'Invalid OTP');
             setResetToken(data.resetToken);
             setSuccessMsg('OTP verified! Set your new password below.');
             setStep('password');
@@ -83,8 +93,8 @@ const ForgotPassword = () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ resetToken, newPassword }),
             });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.message);
+            const data = await handleResponse(res);
+            if (!res.ok) throw new Error(data.message || 'Failed to reset password');
             setSuccessMsg(data.message);
             setStep('done');
         } catch (err) {
@@ -127,8 +137,8 @@ const ForgotPassword = () => {
                             <React.Fragment key={label}>
                                 <div className="flex flex-col items-center gap-1">
                                     <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all ${i < stepIndex ? 'bg-indigo-600 text-white' :
-                                            i === stepIndex ? 'bg-indigo-100 text-indigo-600 border-2 border-indigo-600' :
-                                                'bg-gray-100 text-gray-400'
+                                        i === stepIndex ? 'bg-indigo-100 text-indigo-600 border-2 border-indigo-600' :
+                                            'bg-gray-100 text-gray-400'
                                         }`}>
                                         {i < stepIndex ? '✓' : i + 1}
                                     </div>
