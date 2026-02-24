@@ -121,8 +121,9 @@ const Register = () => {
                     </div>
 
                     <div className="mt-6 p-3 bg-brand-50 dark:bg-brand-900/10 border border-brand-100 dark:border-brand-900/20 rounded-xl">
-                        <p className="text-xs text-center text-brand-700 dark:text-brand-300 flex items-center justify-center gap-2">
-                            <Bus size={14} /> Driver accounts are created by the school admin.
+                        <p className="text-xs text-center text-brand-700 dark:text-brand-300 flex flex-col items-center justify-center gap-1">
+                            <span className="flex items-center gap-2"><Bus size={14} /> Driver accounts are created by administrators.</span>
+                            <span className="flex items-center gap-2"><UserCircle size={14} /> Student accounts are managed by parents or school admins.</span>
                         </p>
                     </div>
 

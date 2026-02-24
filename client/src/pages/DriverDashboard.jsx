@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import MapComponent from '../components/MapComponent';
 import { Play, Square, MapPin, LogOut, Radio, Send, AlertTriangle, Info, Siren, MessageSquare } from 'lucide-react';
 import ThemeToggle from '../components/ThemeToggle';
+import { API_URL } from '../constants';
 
 const DriverDashboard = () => {
     const { user, logout } = useAuth();
@@ -26,7 +27,7 @@ const DriverDashboard = () => {
     const messagesEndRef = useRef(null);
 
     useEffect(() => {
-        axios.get('http://localhost:5000/api/buses')
+        axios.get(`${API_URL}/buses`)
             .then(res => {
                 const buses = res.data;
                 setAvailableBuses(buses);
@@ -50,7 +51,7 @@ const DriverDashboard = () => {
 
     useEffect(() => {
         if (!selectedBus) { setAssignedRoute(null); return; }
-        axios.get('http://localhost:5000/api/routes').then(({ data }) => {
+        axios.get(`${API_URL}/routes`).then(({ data }) => {
             setAssignedRoute(data.find(r => r.assignedBus?._id === selectedBus._id) || null);
         }).catch(console.error);
     }, [selectedBus]);

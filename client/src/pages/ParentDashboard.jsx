@@ -7,6 +7,7 @@ import MapComponent from '../components/MapComponent';
 import { User, Bus, ArrowLeft, Clock, LogOut, Radio, MapPin, Send, AlertTriangle, Info, Siren } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import ThemeToggle from '../components/ThemeToggle';
+import { API_URL } from '../constants';
 
 const ParentDashboard = () => {
     const { logout } = useAuth();
@@ -29,7 +30,7 @@ const ParentDashboard = () => {
                 const userInfo = JSON.parse(localStorage.getItem('userInfo'));
                 const token = userInfo?.token;
                 if (!token) return;
-                const { data } = await axios.get('http://localhost:5000/api/students/my', { headers: { Authorization: `Bearer ${token}` } });
+                const { data } = await axios.get(`${API_URL}/students/my`, { headers: { Authorization: `Bearer ${token}` } });
                 setMyStudents(data);
                 if (data.length === 1 && data[0].bus) { setTrackedBusId(data[0].bus.busNumber); setIsTracking(true); notify.success(`Tracking ${data[0].name}'s Bus`); }
             } catch (e) { console.error(e); } finally { setLoadingStudents(false); }

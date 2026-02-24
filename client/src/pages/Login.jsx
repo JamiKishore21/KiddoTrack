@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { GoogleLogin } from '@react-oauth/google';
 import { useNavigate, Link } from 'react-router-dom';
-import { Bus, User, Shield, ArrowLeft, Loader2, Mail, Lock, Eye, EyeOff } from 'lucide-react';
+import { Bus, User, Shield, ArrowLeft, Loader2, Mail, Lock, Eye, EyeOff, UserCircle, ChevronDown } from 'lucide-react';
 import ThemeToggle from '../components/ThemeToggle';
 
 const Login = () => {
@@ -40,6 +40,7 @@ const Login = () => {
 
     const roles = [
         { id: 'parent', label: 'Parent', icon: User },
+        { id: 'student', label: 'Student', icon: UserCircle },
         { id: 'driver', label: 'Driver', icon: Bus },
         { id: 'admin', label: 'Admin', icon: Shield },
     ];
@@ -69,22 +70,27 @@ const Login = () => {
                         <p className="text-surface-400 dark:text-surface-500 text-sm mt-1">Sign in to continue to KiddoTrack</p>
                     </div>
 
-                    {/* Role Selector — Segmented Control */}
-                    <div className="flex mb-6 p-1 bg-surface-100 dark:bg-surface-900 rounded-xl border border-surface-200 dark:border-surface-700/40">
-                        {roles.map(r => (
-                            <button
-                                key={r.id}
-                                onClick={() => setRole(r.id)}
-                                className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg font-medium text-sm transition-all duration-200
-                                    ${role === r.id
-                                        ? 'bg-white dark:bg-surface-700 text-surface-900 dark:text-white shadow-sm'
-                                        : 'text-surface-400 dark:text-surface-500 hover:text-surface-600 dark:hover:text-surface-400'
-                                    }`}
+                    {/* Role Selector — Dropdown */}
+                    <div className="relative mb-6">
+                        <label className="label">I am a...</label>
+                        <div className="input-icon-wrapper">
+                            {React.createElement(roles.find(r => r.id === role)?.icon || User, {
+                                size: 18,
+                                className: "input-icon"
+                            })}
+                            <select
+                                value={role}
+                                onChange={(e) => setRole(e.target.value)}
+                                className="input appearance-none pr-10"
                             >
-                                <r.icon size={15} />
-                                {r.label}
-                            </button>
-                        ))}
+                                {roles.map(r => (
+                                    <option key={r.id} value={r.id}>
+                                        {r.label}
+                                    </option>
+                                ))}
+                            </select>
+                            <ChevronDown size={18} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-surface-400 pointer-events-none" />
+                        </div>
                     </div>
 
                     {error && (

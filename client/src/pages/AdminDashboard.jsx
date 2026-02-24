@@ -5,6 +5,7 @@ import MapComponent from '../components/MapComponent';
 import { Plus, Bus, Map as MapIcon, Users, Route, LogOut, Radio, List, UserPlus } from 'lucide-react';
 import { socket } from '../socket';
 import ThemeToggle from '../components/ThemeToggle';
+import { API_URL } from '../constants';
 
 const AdminDashboard = () => {
     const { user, logout } = useAuth();
@@ -27,16 +28,16 @@ const AdminDashboard = () => {
 
     useEffect(() => { fetchBuses(); fetchRoutes(); fetchStudents(); fetchUsers(); }, []);
 
-    const fetchStudents = async () => { try { const t = JSON.parse(localStorage.getItem('userInfo'))?.token; const { data } = await axios.get('http://localhost:5000/api/students', { headers: { Authorization: `Bearer ${t}` } }); setStudents(data); } catch (e) { console.error(e); } };
-    const fetchUsers = async () => { try { const t = JSON.parse(localStorage.getItem('userInfo'))?.token; const { data } = await axios.get('http://localhost:5000/api/auth/parents', { headers: { Authorization: `Bearer ${t}` } }); setUsers(data); } catch (e) { console.error(e); } };
-    const fetchDrivers = async () => { try { const t = JSON.parse(localStorage.getItem('userInfo'))?.token; const { data } = await axios.get('http://localhost:5000/api/auth/drivers', { headers: { Authorization: `Bearer ${t}` } }); setDrivers(data); } catch (e) { console.error(e); } };
+    const fetchStudents = async () => { try { const t = JSON.parse(localStorage.getItem('userInfo'))?.token; const { data } = await axios.get(`${API_URL}/students`, { headers: { Authorization: `Bearer ${t}` } }); setStudents(data); } catch (e) { console.error(e); } };
+    const fetchUsers = async () => { try { const t = JSON.parse(localStorage.getItem('userInfo'))?.token; const { data } = await axios.get(`${API_URL}/auth/parents`, { headers: { Authorization: `Bearer ${t}` } }); setUsers(data); } catch (e) { console.error(e); } };
+    const fetchDrivers = async () => { try { const t = JSON.parse(localStorage.getItem('userInfo'))?.token; const { data } = await axios.get(`${API_URL}/auth/drivers`, { headers: { Authorization: `Bearer ${t}` } }); setDrivers(data); } catch (e) { console.error(e); } };
 
     const handleAddDriver = async (e) => {
         e.preventDefault();
         setDriverError('');
         try {
             const token = JSON.parse(localStorage.getItem('userInfo'))?.token;
-            await axios.post('http://localhost:5000/api/auth/create-driver', driverFormData, {
+            await axios.post(`${API_URL}/auth/create-driver`, driverFormData, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setShowDriverModal(false);
@@ -47,7 +48,7 @@ const AdminDashboard = () => {
         }
     };
 
-    const handleAddStudent = async (e) => { e.preventDefault(); try { const t = JSON.parse(localStorage.getItem('userInfo'))?.token; await axios.post('http://localhost:5000/api/students', studentFormData, { headers: { Authorization: `Bearer ${t}` } }); setShowStudentModal(false); setStudentFormData({ name: '', parentId: '', busId: '' }); fetchStudents(); } catch (e) { alert(e.response?.data?.message || 'Error'); } };
+    const handleAddStudent = async (e) => { e.preventDefault(); try { const t = JSON.parse(localStorage.getItem('userInfo'))?.token; await axios.post(`${API_URL}/students`, studentFormData, { headers: { Authorization: `Bearer ${t}` } }); setShowStudentModal(false); setStudentFormData({ name: '', parentId: '', busId: '' }); fetchStudents(); } catch (e) { alert(e.response?.data?.message || 'Error'); } };
 
     useEffect(() => {
         fetchBuses(); fetchRoutes(); fetchStudents(); fetchUsers(); fetchDrivers();
@@ -59,10 +60,10 @@ const AdminDashboard = () => {
         return () => { socket.off('connect', join); socket.off('busLocationUpdate'); socket.off('activeBusList'); socket.off('busSessionEnded'); socket.disconnect(); };
     }, []);
 
-    const fetchBuses = async () => { try { const { data } = await axios.get('http://localhost:5000/api/buses'); setBuses(data); } catch (e) { console.error(e); } };
-    const fetchRoutes = async () => { try { const { data } = await axios.get('http://localhost:5000/api/routes'); setRoutes(data); } catch (e) { console.error(e); } };
-    const handleAddBus = async (e) => { e.preventDefault(); try { await axios.post('http://localhost:5000/api/buses', formData); setShowAddModal(false); setFormData({ busNumber: '', plateNumber: '', capacity: '' }); fetchBuses(); } catch (e) { alert(e.response?.data?.message || 'Error'); } };
-    const handleAddRoute = async (e) => { e.preventDefault(); try { await axios.post('http://localhost:5000/api/routes', { name: routeFormData.name, stops: routeFormData.stops.split(',').map(s => ({ name: s.trim() })), assignedBus: routeFormData.assignedBus || null }); setShowRouteModal(false); setRouteFormData({ name: '', stops: '', assignedBus: '' }); fetchRoutes(); } catch (e) { alert(e.response?.data?.message || 'Error'); } };
+    const fetchBuses = async () => { try { const { data } = await axios.get(`${API_URL}/buses`); setBuses(data); } catch (e) { console.error(e); } };
+    const fetchRoutes = async () => { try { const { data } = await axios.get(`${API_URL}/routes`); setRoutes(data); } catch (e) { console.error(e); } };
+    const handleAddBus = async (e) => { e.preventDefault(); try { await axios.post(`${API_URL}/buses`, formData); setShowAddModal(false); setFormData({ busNumber: '', plateNumber: '', capacity: '' }); fetchBuses(); } catch (e) { alert(e.response?.data?.message || 'Error'); } };
+    const handleAddRoute = async (e) => { e.preventDefault(); try { await axios.post(`${API_URL}/routes`, { name: routeFormData.name, stops: routeFormData.stops.split(',').map(s => ({ name: s.trim() })), assignedBus: routeFormData.assignedBus || null }); setShowRouteModal(false); setRouteFormData({ name: '', stops: '', assignedBus: '' }); fetchRoutes(); } catch (e) { alert(e.response?.data?.message || 'Error'); } };
 
     const navItems = [
         { id: 'list', label: 'Buses', icon: Bus },
