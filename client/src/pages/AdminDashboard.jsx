@@ -7,9 +7,78 @@ import { socket } from '../socket';
 import ThemeToggle from '../components/ThemeToggle';
 import { API_URL } from '../constants';
 
+const navItems = [
+    { id: 'list', label: 'Buses', icon: Bus },
+    { id: 'routes', label: 'Routes', icon: Route },
+    { id: 'students', label: 'Students', icon: Users },
+    { id: 'drivers', label: 'Drivers', icon: UserPlus },
+    { id: 'map', label: 'Live Map', icon: MapIcon },
+    { id: 'feed', label: 'Live Feed', icon: Radio },
+];
+
+const Modal = ({ show, onClose, title, children }) => {
+    if (!show) return null;
+    return (
+        <div className="fixed inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 transition-opacity" onClick={onClose}>
+            <div className="bg-white dark:bg-surface-800 rounded-t-3xl sm:rounded-3xl p-6 w-full sm:max-w-md shadow-glass-lg border border-surface-200 dark:border-surface-700/50" onClick={e => e.stopPropagation()}>
+                <h2 className="text-xl font-bold text-surface-900 dark:text-white mb-5">{title}</h2>
+                {children}
+            </div>
+        </div>
+    );
+};
+
+// --- Stable Form Components ---
+const DriverForm = ({ onSubmit, onClose, formData, setFormData, error, isEdit = false }) => (
+    <div className="w-full">
+        <p className="text-xs text-surface-400 dark:text-surface-500 mb-4">{isEdit ? 'Update driver details.' : 'The driver will use these credentials to log in.'}</p>
+        {error && <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 p-3 rounded-xl mb-4 text-sm">{error}</div>}
+        <form onSubmit={onSubmit} className="space-y-4">
+            <div><label className="label">Full Name</label><input type="text" required className="input" placeholder="e.g. Ravi Kumar" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} /></div>
+            <div><label className="label">Email</label><input type="email" required className="input" placeholder="driver@example.com" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} /></div>
+            {!isEdit && <div><label className="label">Password</label><input type="password" required minLength={6} className="input" placeholder="Min. 6 characters" value={formData.password} onChange={e => setFormData({ ...formData, password: e.target.value })} /></div>}
+            <div className="flex gap-3 mt-6"><button type="button" onClick={onClose} className="btn-secondary flex-1">Cancel</button><button type="submit" className="btn-primary flex-1">{isEdit ? 'Update Driver' : 'Create Driver'}</button></div>
+        </form>
+    </div>
+);
+
+const BusForm = ({ onSubmit, onClose, formData, setFormData, drivers = [], isEdit = false }) => (
+    <form onSubmit={onSubmit} className="space-y-4">
+        <div><label className="label">Bus Number</label><input type="text" required className="input" placeholder="e.g. 101" value={formData.busNumber} onChange={e => setFormData({ ...formData, busNumber: e.target.value })} /></div>
+        <div><label className="label">License Plate</label><input type="text" required className="input" placeholder="e.g. DL-1C-2024" value={formData.plateNumber} onChange={e => setFormData({ ...formData, plateNumber: e.target.value })} /></div>
+        <div><label className="label">Capacity</label><input type="number" required className="input" placeholder="e.g. 40" value={formData.capacity} onChange={e => setFormData({ ...formData, capacity: e.target.value })} /></div>
+        <div>
+            <label className="label">Assign Driver</label>
+            <select className="input" value={formData.driverId || ''} onChange={e => setFormData({ ...formData, driverId: e.target.value })}>
+                <option value="">-- No Driver --</option>
+                {drivers.map(d => <option key={d._id} value={d._id}>{d.name} ({d.email})</option>)}
+            </select>
+        </div>
+        <div className="flex gap-3 mt-6"><button type="button" onClick={onClose} className="btn-secondary flex-1">Cancel</button><button type="submit" className="btn-primary flex-1">{isEdit ? 'Update Bus' : 'Save Bus'}</button></div>
+    </form>
+);
+
+const RouteForm = ({ onSubmit, onClose, formData, setFormData, buses, isEdit = false }) => (
+    <form onSubmit={onSubmit} className="space-y-4">
+        <div><label className="label">Route Name</label><input type="text" required className="input" placeholder="School to Downtown" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} /></div>
+        <div><label className="label">Stops (comma separated)</label><textarea className="input" placeholder="Stop A, Stop B, Stop C" rows="3" value={formData.stops} onChange={e => setFormData({ ...formData, stops: e.target.value })} /></div>
+        <div><label className="label">Assign Bus</label><select className="input" value={formData.assignedBus} onChange={e => setFormData({ ...formData, assignedBus: e.target.value })}><option value="">-- No Bus --</option>{buses.map(b => <option key={b._id} value={b._id}>Bus {b.busNumber} ({b.plateNumber})</option>)}</select></div>
+        <div className="flex gap-3 mt-6"><button type="button" onClick={onClose} className="btn-secondary flex-1">Cancel</button><button type="submit" className="btn-primary flex-1">{isEdit ? 'Update Route' : 'Create Route'}</button></div>
+    </form>
+);
+
+const StudentForm = ({ onSubmit, onClose, formData, setFormData, users, buses, isEdit = false }) => (
+    <form onSubmit={onSubmit} className="space-y-4">
+        <div><label className="label">Student Name</label><input type="text" required className="input" placeholder="John Doe" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} /></div>
+        <div><label className="label">Parent</label><select required className="input" value={formData.parentId} onChange={e => setFormData({ ...formData, parentId: e.target.value })}><option value="">Select Parent</option>{users.map(u => <option key={u._id} value={u._id}>{u.name} ({u.email})</option>)}</select></div>
+        <div><label className="label">Assign Bus</label><select required className="input" value={formData.busId} onChange={e => setFormData({ ...formData, busId: e.target.value })}><option value="">Select Bus</option>{buses.map(b => <option key={b._id} value={b._id}>Bus {b.busNumber} ({b.plateNumber})</option>)}</select></div>
+        <div className="flex gap-3 mt-6"><button type="button" onClick={onClose} className="btn-secondary flex-1">Cancel</button><button type="submit" className="btn-primary flex-1">{isEdit ? 'Update Student' : 'Add Student'}</button></div>
+    </form>
+);
+
 const AdminDashboard = () => {
     const { user, logout } = useAuth();
-    const [view, setView] = useState('list');
+    const [view, setView] = useState(localStorage.getItem('admin_dashboard_view') || 'list');
     const [buses, setBuses] = useState([]);
     const [routes, setRoutes] = useState([]);
     const [students, setStudents] = useState([]);
@@ -21,12 +90,20 @@ const AdminDashboard = () => {
     const [driverFormData, setDriverFormData] = useState({ name: '', email: '', password: '' });
     const [driverError, setDriverError] = useState('');
     const [studentFormData, setStudentFormData] = useState({ name: '', parentId: '', busId: '' });
-    const [formData, setFormData] = useState({ busNumber: '', plateNumber: '', capacity: '' });
+    const [formData, setFormData] = useState({ busNumber: '', plateNumber: '', capacity: '', driverId: '' });
     const [allBusLocations, setAllBusLocations] = useState([]);
+    const [busAlerts, setBusAlerts] = useState([]);
     const [showRouteModal, setShowRouteModal] = useState(false);
     const [routeFormData, setRouteFormData] = useState({ name: '', stops: '', assignedBus: '' });
 
-    useEffect(() => { fetchBuses(); fetchRoutes(); fetchStudents(); fetchUsers(); }, []);
+    const [editId, setEditId] = useState(null);
+    const [unreadFeedCount, setUnreadFeedCount] = useState(0);
+
+    useEffect(() => {
+        localStorage.setItem('admin_dashboard_view', view);
+        if (view === 'feed') setUnreadFeedCount(0);
+    }, [view]);
+
 
     const fetchStudents = async () => { try { const t = JSON.parse(localStorage.getItem('userInfo'))?.token; const { data } = await axios.get(`${API_URL}/students`, { headers: { Authorization: `Bearer ${t}` } }); setStudents(data); } catch (e) { console.error(e); } };
     const fetchUsers = async () => { try { const t = JSON.parse(localStorage.getItem('userInfo'))?.token; const { data } = await axios.get(`${API_URL}/auth/parents`, { headers: { Authorization: `Bearer ${t}` } }); setUsers(data); } catch (e) { console.error(e); } };
@@ -48,42 +125,98 @@ const AdminDashboard = () => {
         }
     };
 
-    const handleAddStudent = async (e) => { e.preventDefault(); try { const t = JSON.parse(localStorage.getItem('userInfo'))?.token; await axios.post(`${API_URL}/students`, studentFormData, { headers: { Authorization: `Bearer ${t}` } }); setShowStudentModal(false); setStudentFormData({ name: '', parentId: '', busId: '' }); fetchStudents(); } catch (e) { alert(e.response?.data?.message || 'Error'); } };
+    const handleAddStudent = async (e) => {
+        e.preventDefault();
+        try {
+            const t = JSON.parse(localStorage.getItem('userInfo'))?.token;
+            if (editId) {
+                await axios.put(`${API_URL}/students/${editId}`, studentFormData, { headers: { Authorization: `Bearer ${t}` } });
+            } else {
+                await axios.post(`${API_URL}/students`, studentFormData, { headers: { Authorization: `Bearer ${t}` } });
+            }
+            setShowStudentModal(false); setEditId(null); setStudentFormData({ name: '', parentId: '', busId: '' }); fetchStudents();
+        } catch (e) { alert(e.response?.data?.message || 'Error'); }
+    };
+
+    const fetchAllNotifications = async () => {
+        try {
+            const token = JSON.parse(localStorage.getItem('userInfo'))?.token;
+            const lastCleared = localStorage.getItem('admin_feed_last_cleared') || 0;
+            const { data } = await axios.get(`${API_URL}/notifications/bus/ALL`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            // Show only notifications after the last clear
+            setBusAlerts(data.filter(n => new Date(n.timestamp).getTime() > Number(lastCleared)));
+        } catch (error) {
+            console.error('Error fetching notifications:', error);
+        }
+    };
 
     useEffect(() => {
         fetchBuses(); fetchRoutes(); fetchStudents(); fetchUsers(); fetchDrivers();
-        socket.on('busLocationUpdate', (d) => { setAllBusLocations(prev => { const i = prev.findIndex(b => String(b.busId) === String(d.busId)); if (i > -1) { const n = [...prev]; n[i] = { ...n[i], ...d }; return n; } return [...prev, d]; }); });
-        socket.on('activeBusList', (l) => { setAllBusLocations(prev => { const m = {}; prev.forEach(p => m[p.busId] = p); l.forEach(p => m[p.busId] = p); return Object.values(m); }); });
-        socket.on('busSessionEnded', (d) => { setAllBusLocations(prev => prev.filter(b => b.busId !== d.busId)); });
+        if (view === 'feed') fetchAllNotifications();
+
+        const onBusUpdate = (d) => { setAllBusLocations(prev => { const i = prev.findIndex(b => String(b.busId) === String(d.busId)); if (i > -1) { const n = [...prev]; n[i] = { ...n[i], ...d }; return n; } return [...prev, d]; }); };
+        const onActiveList = (l) => { setAllBusLocations(prev => { const m = {}; prev.forEach(p => m[p.busId] = p); l.forEach(p => m[p.busId] = p); return Object.values(m); }); };
+        const onSessionEnd = (d) => { setAllBusLocations(prev => prev.filter(b => b.busId !== d.busId)); };
+        const onStatusUpdate = (d) => {
+            setBusAlerts(prev => [d, ...prev].slice(0, 10));
+            if (view !== 'feed') setUnreadFeedCount(prev => prev + 1);
+        };
+
+        socket.on('busLocationUpdate', onBusUpdate);
+        socket.on('activeBusList', onActiveList);
+        socket.on('busSessionEnded', onSessionEnd);
+        socket.on('busStatusUpdate', onStatusUpdate);
+
         const join = () => socket.emit('joinRoom', 'admin_room');
-        socket.on('connect', join); if (!socket.connected) socket.connect(); else join();
-        return () => { socket.off('connect', join); socket.off('busLocationUpdate'); socket.off('activeBusList'); socket.off('busSessionEnded'); socket.disconnect(); };
-    }, []);
+        socket.on('connect', join);
+        if (!socket.connected) socket.connect(); else join();
+
+        return () => {
+            socket.off('connect', join);
+            socket.off('busLocationUpdate', onBusUpdate);
+            socket.off('activeBusList', onActiveList);
+            socket.off('busSessionEnded', onSessionEnd);
+            socket.off('busStatusUpdate', onStatusUpdate);
+            socket.disconnect();
+        };
+    }, [view]);
 
     const fetchBuses = async () => { try { const { data } = await axios.get(`${API_URL}/buses`); setBuses(data); } catch (e) { console.error(e); } };
     const fetchRoutes = async () => { try { const { data } = await axios.get(`${API_URL}/routes`); setRoutes(data); } catch (e) { console.error(e); } };
-    const handleAddBus = async (e) => { e.preventDefault(); try { await axios.post(`${API_URL}/buses`, formData); setShowAddModal(false); setFormData({ busNumber: '', plateNumber: '', capacity: '' }); fetchBuses(); } catch (e) { alert(e.response?.data?.message || 'Error'); } };
-    const handleAddRoute = async (e) => { e.preventDefault(); try { await axios.post(`${API_URL}/routes`, { name: routeFormData.name, stops: routeFormData.stops.split(',').map(s => ({ name: s.trim() })), assignedBus: routeFormData.assignedBus || null }); setShowRouteModal(false); setRouteFormData({ name: '', stops: '', assignedBus: '' }); fetchRoutes(); } catch (e) { alert(e.response?.data?.message || 'Error'); } };
-
-    const navItems = [
-        { id: 'list', label: 'Buses', icon: Bus },
-        { id: 'routes', label: 'Routes', icon: Route },
-        { id: 'students', label: 'Students', icon: Users },
-        { id: 'drivers', label: 'Drivers', icon: UserPlus },
-        { id: 'map', label: 'Live Map', icon: MapIcon },
-    ];
-
-    const Modal = ({ show, onClose, title, children }) => {
-        if (!show) return null;
-        return (
-            <div className="fixed inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 animate-fade-in" onClick={onClose}>
-                <div className="bg-white dark:bg-surface-800 rounded-t-3xl sm:rounded-3xl p-6 w-full sm:max-w-md shadow-glass-lg border border-surface-200 dark:border-surface-700/50 animate-slide-up" onClick={e => e.stopPropagation()}>
-                    <h2 className="text-xl font-bold text-surface-900 dark:text-white mb-5">{title}</h2>
-                    {children}
-                </div>
-            </div>
-        );
+    const handleAddBus = async (e) => {
+        e.preventDefault();
+        try {
+            if (editId) {
+                await axios.put(`${API_URL}/buses/${editId}`, formData);
+            } else {
+                await axios.post(`${API_URL}/buses`, formData);
+            }
+            setShowAddModal(false); setEditId(null); setFormData({ busNumber: '', plateNumber: '', capacity: '', driverId: '' }); fetchBuses();
+        } catch (e) { alert(e.response?.data?.message || 'Error'); }
     };
+    const handleAddRoute = async (e) => {
+        e.preventDefault();
+        try {
+            const payload = { name: routeFormData.name, stops: routeFormData.stops.split(',').map(s => ({ name: s.trim() })), assignedBus: routeFormData.assignedBus || null };
+            if (editId) {
+                await axios.put(`${API_URL}/routes/${editId}`, payload);
+            } else {
+                await axios.post(`${API_URL}/routes`, payload);
+            }
+            setShowRouteModal(false); setEditId(null); setRouteFormData({ name: '', stops: '', assignedBus: '' }); fetchRoutes();
+        } catch (e) { alert(e.response?.data?.message || 'Error'); }
+    };
+
+    const handleDeleteBus = async (id) => { if (window.confirm('Delete this bus?')) { try { await axios.delete(`${API_URL}/buses/${id}`); fetchBuses(); } catch (e) { console.error(e); } } };
+    const handleDeleteRoute = async (id) => { if (window.confirm('Delete this route?')) { try { await axios.delete(`${API_URL}/routes/${id}`); fetchRoutes(); } catch (e) { console.error(e); } } };
+    const handleDeleteStudent = async (id) => { if (window.confirm('Delete this student?')) { try { const t = JSON.parse(localStorage.getItem('userInfo'))?.token; await axios.delete(`${API_URL}/students/${id}`, { headers: { Authorization: `Bearer ${t}` } }); fetchStudents(); } catch (e) { console.error(e); } } };
+
+    const startEditBus = (bus) => { setEditId(bus._id); setFormData({ busNumber: bus.busNumber, plateNumber: bus.plateNumber, capacity: bus.capacity, driverId: bus.driver?._id || '' }); setShowAddModal(true); };
+    const startEditRoute = (r) => { setEditId(r._id); setRouteFormData({ name: r.name, stops: r.stops?.map(s => s.name).join(', ') || '', assignedBus: r.assignedBus?._id || '' }); setShowRouteModal(true); };
+    const startEditStudent = (s) => { setEditId(s._id); setStudentFormData({ name: s.name, parentId: s.parent?._id || '', busId: s.bus?._id || '' }); setShowStudentModal(true); };
+
 
     return (
         <div className="h-screen-safe flex flex-col bg-surface-50 dark:bg-surface-950">
@@ -95,51 +228,111 @@ const AdminDashboard = () => {
                     </h1>
                     <span className="badge badge-success"><Radio size={10} className={allBusLocations.length > 0 ? 'animate-pulse' : ''} /> {allBusLocations.length} Live</span>
                 </div>
-                <div className="hidden md:flex gap-1.5 items-center">
+                <div className="hidden lg:flex gap-1.5 items-center">
                     {navItems.map(item => (
                         <button key={item.id} onClick={() => setView(item.id)}
-                            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium transition-all ${view === item.id ? 'bg-brand-100 dark:bg-brand-900/30 text-brand-700 dark:text-brand-400' : 'text-surface-500 dark:text-surface-400 hover:bg-surface-100 dark:hover:bg-surface-700'}`}>
+                            className={`relative flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium transition-all ${view === item.id ? 'bg-brand-100 dark:bg-brand-900/30 text-brand-700 dark:text-brand-400' : 'text-surface-500 dark:text-surface-400 hover:bg-surface-100 dark:hover:bg-surface-700'}`}>
                             <item.icon size={16} /> {item.label}
+                            {item.id === 'feed' && unreadFeedCount > 0 && (
+                                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center animate-bounce">{unreadFeedCount}</span>
+                            )}
                         </button>
                     ))}
-                    <button onClick={() => setShowAddModal(true)} className="btn-primary py-2 px-3 text-sm ml-1 flex items-center gap-1"><Plus size={16} /> Add Bus</button>
+                    <button onClick={() => { setEditId(null); setFormData({ busNumber: '', plateNumber: '', capacity: '', driverId: '' }); setShowAddModal(true); }} className="btn-primary py-2 px-3 text-sm ml-1 flex items-center gap-1"><Plus size={16} /> Add Bus</button>
                     <ThemeToggle className="ml-1" />
                     <button onClick={logout} className="btn-ghost p-2 ml-0.5"><LogOut size={18} /></button>
                 </div>
-                <div className="flex items-center gap-1.5 md:hidden">
-                    <button onClick={() => setShowAddModal(true)} className="btn-primary p-2"><Plus size={18} /></button>
+                <div className="flex items-center gap-1.5 lg:hidden">
+                    <button onClick={() => { setEditId(null); setFormData({ busNumber: '', plateNumber: '', capacity: '', driverId: '' }); setShowAddModal(true); }} className="btn-primary p-2"><Plus size={18} /></button>
                     <ThemeToggle />
                     <button onClick={logout} className="btn-ghost p-2"><LogOut size={18} /></button>
                 </div>
             </header>
 
-            <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-surface-800 border-t border-surface-200 dark:border-surface-700/50 z-30 flex">
+            <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-surface-800 border-t border-surface-200 dark:border-surface-700/50 z-30 flex">
                 {navItems.map(item => (
                     <button key={item.id} onClick={() => setView(item.id)}
-                        className={`flex-1 flex flex-col items-center gap-0.5 py-2.5 transition-colors ${view === item.id ? 'text-brand-500 dark:text-brand-400' : 'text-surface-400 dark:text-surface-500'}`}>
+                        className={`relative flex-1 flex flex-col items-center gap-0.5 py-2.5 transition-colors ${view === item.id ? 'text-brand-500 dark:text-brand-400' : 'text-surface-400 dark:text-surface-500'}`}>
                         <item.icon size={20} /><span className="text-[10px] font-medium">{item.label}</span>
+                        {item.id === 'feed' && unreadFeedCount > 0 && (
+                            <span className="absolute top-1 right-4 bg-red-500 text-white text-[8px] w-3.5 h-3.5 rounded-full flex items-center justify-center">{unreadFeedCount}</span>
+                        )}
                     </button>
                 ))}
             </nav>
 
-            <main className="flex-1 overflow-auto p-3 sm:p-6 pb-20 md:pb-6">
+            <main className="flex-1 overflow-auto p-3 sm:p-6 pb-20 lg:pb-6">
+                {view === 'feed' && (
+                    <div className="max-w-3xl mx-auto space-y-4">
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-xl font-bold flex items-center gap-2"><Radio size={20} className="text-brand-500" /> Live Broadcast Feed</h2>
+                            <button onClick={() => {
+                                localStorage.setItem('admin_feed_last_cleared', Date.now());
+                                setBusAlerts([]);
+                            }} className="text-xs text-surface-400 hover:text-red-500 font-bold uppercase tracking-wider">Clear Feed</button>
+                        </div>
+                        {busAlerts.length === 0 ? (
+                            <div className="card p-12 text-center">
+                                <Radio size={48} className="mx-auto mb-4 text-surface-200" />
+                                <p className="text-surface-400">No broadcasts recorded yet.</p>
+                            </div>
+                        ) : (
+                            busAlerts.map((alert, i) => (
+                                <div key={i} className={`card p-4 border-l-4 animate-slide-up ${alert.type === 'emergency' ? 'border-red-500 bg-red-50/30' : alert.type === 'delay' ? 'border-yellow-500 bg-yellow-50/30' : 'border-blue-500 bg-blue-50/30'}`}>
+                                    <div className="flex justify-between items-start mb-2">
+                                        <div className="flex items-center gap-2">
+                                            <span className={`badge ${alert.type === 'emergency' ? 'badge-error' : alert.type === 'delay' ? 'badge-warning' : 'badge-info'} text-[10px] uppercase`}>{alert.type}</span>
+                                            <span className="font-bold text-sm">Bus {alert.busId}</span>
+                                        </div>
+                                        <span className="text-[10px] text-surface-400 font-mono">{new Date(alert.timestamp).toLocaleTimeString()}</span>
+                                    </div>
+                                    <p className="text-sm text-surface-700 dark:text-surface-200">{alert.message}</p>
+                                    <div className="mt-2 text-[10px] text-surface-400">Broadcast by: {alert.driverName}</div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                )}
                 {view === 'list' && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-                        {buses.map(bus => (
-                            <div key={bus._id} className="card p-4 sm:p-5">
-                                <div className="flex justify-between items-start mb-3">
-                                    <div>
-                                        <h3 className="text-base sm:text-lg font-bold text-surface-900 dark:text-white">Bus {bus.busNumber}</h3>
-                                        <p className="text-xs text-surface-400 font-mono">{bus.plateNumber}</p>
+                        {buses.map(bus => {
+                            const liveData = allBusLocations.find(l => String(l.busId) === String(bus.busNumber));
+                            const isLive = !!liveData;
+                            return (
+                                <div key={bus._id} className={`card p-4 sm:p-5 border-2 transition-all ${isLive ? 'border-green-500 shadow-lg shadow-green-500/10' : 'border-transparent'}`}>
+                                    <div className="flex justify-between items-start mb-3">
+                                        <div>
+                                            <div className="flex items-center gap-2">
+                                                <h3 className="text-base sm:text-lg font-bold text-surface-900 dark:text-white">Bus {bus.busNumber}</h3>
+                                                {isLive && <span className="flex h-2 w-2 rounded-full bg-green-500 animate-pulse" />}
+                                            </div>
+                                            <p className="text-xs text-surface-400 font-mono">{bus.plateNumber}</p>
+                                        </div>
+                                        <div className="flex flex-col items-end gap-1">
+                                            {isLive ? (
+                                                <span className="badge badge-success text-[10px] py-0 px-1.5 animate-pulse">LIVE</span>
+                                            ) : (
+                                                <span className="badge badge-neutral text-[10px] py-0 px-1.5 opacity-60">OFFLINE</span>
+                                            )}
+                                            <span className="text-[9px] font-bold text-surface-400 uppercase tracking-tighter">System: {bus.status}</span>
+                                        </div>
                                     </div>
-                                    <span className={bus.status === 'active' ? 'badge badge-success' : 'badge badge-neutral'}>{bus.status.toUpperCase()}</span>
+                                    <div className="space-y-2 text-sm">
+                                        <div className="flex justify-between text-surface-500 dark:text-surface-400"><span>Capacity</span><span className="font-semibold text-surface-800 dark:text-surface-200">{bus.capacity}</span></div>
+                                        <div className="flex justify-between text-surface-500 dark:text-surface-400">
+                                            <span>Driver</span>
+                                            <span className={`font-semibold truncate ml-2 text-right ${isLive ? 'text-brand-600 dark:text-brand-400' : 'text-surface-800 dark:text-surface-200'}`}>
+                                                {liveData?.driverName || (bus.driver ? bus.driver.name : 'Unassigned')}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-2 mt-4 pt-4 border-t border-surface-100 dark:border-surface-700/30">
+                                        <button onClick={() => startEditBus(bus)} className="flex-1 text-[10px] font-bold uppercase tracking-wider py-1.5 rounded-lg bg-surface-100 dark:bg-surface-700 text-surface-600 dark:text-surface-300 hover:bg-brand-500 hover:text-white transition-colors">Edit</button>
+                                        <button onClick={() => handleDeleteBus(bus._id)} className="px-3 py-1.5 rounded-lg text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"><Plus size={14} className="rotate-45" /></button>
+                                    </div>
                                 </div>
-                                <div className="space-y-2 text-sm">
-                                    <div className="flex justify-between text-surface-500 dark:text-surface-400"><span>Capacity</span><span className="font-semibold text-surface-800 dark:text-surface-200">{bus.capacity}</span></div>
-                                    <div className="flex justify-between text-surface-500 dark:text-surface-400"><span>Driver</span><span className="font-semibold text-surface-800 dark:text-surface-200 truncate ml-2">{bus.driver?.name || 'Unassigned'}</span></div>
-                                </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                         {buses.length === 0 && <div className="col-span-full py-16 text-center"><Bus size={48} className="mx-auto mb-4 text-surface-300 dark:text-surface-600" /><p className="text-surface-400">No buses. Add one to start.</p></div>}
                     </div>
                 )}
@@ -157,7 +350,12 @@ const AdminDashboard = () => {
                                                 <td className="px-4 py-3 font-semibold text-surface-900 dark:text-surface-100">{r.name}</td>
                                                 <td className="px-4 py-3 text-surface-500 dark:text-surface-400">{r.stops?.length || 0}</td>
                                                 <td className="px-4 py-3">{r.assignedBus ? <span className="badge badge-info">BUS-{r.assignedBus.busNumber}</span> : <span className="text-surface-400 text-xs">—</span>}</td>
-                                                <td className="px-4 py-3 text-right"><button className="text-brand-500 dark:text-brand-400 hover:underline text-xs font-medium">Edit</button></td>
+                                                <td className="px-4 py-3 text-right">
+                                                    <div className="flex justify-end gap-3">
+                                                        <button onClick={() => startEditRoute(r)} className="text-brand-500 dark:text-brand-400 hover:underline text-xs font-medium">Edit</button>
+                                                        <button onClick={() => handleDeleteRoute(r._id)} className="text-red-500 hover:underline text-xs font-medium">Delete</button>
+                                                    </div>
+                                                </td>
                                             </tr>
                                         ))}
                                 </tbody>
@@ -182,7 +380,12 @@ const AdminDashboard = () => {
                                     <tr key={s._id} className="border-b border-surface-100 dark:border-surface-700/30 hover:bg-surface-50 dark:hover:bg-surface-700/20 transition-colors">
                                         <td className="px-4 py-3 font-semibold text-surface-900 dark:text-surface-100">{s.name}</td><td className="px-4 py-3 text-surface-500 dark:text-surface-400">{s.parent?.name || 'N/A'}</td>
                                         <td className="px-4 py-3">{s.bus ? <span className="badge badge-info">Bus {s.bus.busNumber}</span> : <span className="text-surface-400 text-xs">None</span>}</td>
-                                        <td className="px-4 py-3 text-right"><button className="text-brand-500 dark:text-brand-400 hover:underline text-xs font-medium">Edit</button></td>
+                                        <td className="px-4 py-3 text-right">
+                                            <div className="flex justify-end gap-3">
+                                                <button onClick={() => startEditStudent(s)} className="text-brand-500 dark:text-brand-400 hover:underline text-xs font-medium">Edit</button>
+                                                <button onClick={() => handleDeleteStudent(s._id)} className="text-red-500 hover:underline text-xs font-medium">Delete</button>
+                                            </div>
+                                        </td>
                                     </tr>
                                 ))}</tbody>
                             </table>
@@ -256,39 +459,17 @@ const AdminDashboard = () => {
                 )}
             </main>
 
-            <Modal show={showAddModal} onClose={() => setShowAddModal(false)} title="Add New Bus">
-                <form onSubmit={handleAddBus} className="space-y-4">
-                    <div><label className="label">Bus Number</label><input type="text" required className="input" placeholder="e.g. 101" value={formData.busNumber} onChange={e => setFormData({ ...formData, busNumber: e.target.value })} /></div>
-                    <div><label className="label">License Plate</label><input type="text" required className="input" placeholder="e.g. DL-1C-2024" value={formData.plateNumber} onChange={e => setFormData({ ...formData, plateNumber: e.target.value })} /></div>
-                    <div><label className="label">Capacity</label><input type="number" required className="input" placeholder="e.g. 40" value={formData.capacity} onChange={e => setFormData({ ...formData, capacity: e.target.value })} /></div>
-                    <div className="flex gap-3 mt-6"><button type="button" onClick={() => setShowAddModal(false)} className="btn-secondary flex-1">Cancel</button><button type="submit" className="btn-primary flex-1">Save Bus</button></div>
-                </form>
+            <Modal show={showAddModal} onClose={() => { setShowAddModal(false); setEditId(null); }} title={editId ? "Edit Bus" : "Add New Bus"}>
+                <BusForm onSubmit={handleAddBus} onClose={() => { setShowAddModal(false); setEditId(null); }} formData={formData} setFormData={setFormData} drivers={drivers} isEdit={!!editId} />
             </Modal>
-            <Modal show={showRouteModal} onClose={() => setShowRouteModal(false)} title="Create Route">
-                <form onSubmit={handleAddRoute} className="space-y-4">
-                    <div><label className="label">Route Name</label><input type="text" required className="input" placeholder="School to Downtown" value={routeFormData.name} onChange={e => setRouteFormData({ ...routeFormData, name: e.target.value })} /></div>
-                    <div><label className="label">Stops (comma separated)</label><textarea className="input" placeholder="Stop A, Stop B, Stop C" rows="3" value={routeFormData.stops} onChange={e => setRouteFormData({ ...routeFormData, stops: e.target.value })} /></div>
-                    <div><label className="label">Assign Bus</label><select className="input" value={routeFormData.assignedBus} onChange={e => setRouteFormData({ ...routeFormData, assignedBus: e.target.value })}><option value="">-- No Bus --</option>{buses.map(b => <option key={b._id} value={b._id}>Bus {b.busNumber} ({b.plateNumber})</option>)}</select></div>
-                    <div className="flex gap-3 mt-6"><button type="button" onClick={() => setShowRouteModal(false)} className="btn-secondary flex-1">Cancel</button><button type="submit" className="btn-primary flex-1">Create</button></div>
-                </form>
+            <Modal show={showRouteModal} onClose={() => { setShowRouteModal(false); setEditId(null); }} title={editId ? "Edit Route" : "Create Route"}>
+                <RouteForm onSubmit={handleAddRoute} onClose={() => { setShowRouteModal(false); setEditId(null); }} formData={routeFormData} setFormData={setRouteFormData} buses={buses} isEdit={!!editId} />
             </Modal>
-            <Modal show={showStudentModal} onClose={() => setShowStudentModal(false)} title="Add Student">
-                <form onSubmit={handleAddStudent} className="space-y-4">
-                    <div><label className="label">Student Name</label><input type="text" required className="input" placeholder="John Doe" value={studentFormData.name} onChange={e => setStudentFormData({ ...studentFormData, name: e.target.value })} /></div>
-                    <div><label className="label">Parent</label><select required className="input" value={studentFormData.parentId} onChange={e => setStudentFormData({ ...studentFormData, parentId: e.target.value })}><option value="">Select Parent</option>{users.map(u => <option key={u._id} value={u._id}>{u.name} ({u.email})</option>)}</select></div>
-                    <div><label className="label">Assign Bus</label><select required className="input" value={studentFormData.busId} onChange={e => setStudentFormData({ ...studentFormData, busId: e.target.value })}><option value="">Select Bus</option>{buses.map(b => <option key={b._id} value={b._id}>Bus {b.busNumber} ({b.plateNumber})</option>)}</select></div>
-                    <div className="flex gap-3 mt-6"><button type="button" onClick={() => setShowStudentModal(false)} className="btn-secondary flex-1">Cancel</button><button type="submit" className="btn-primary flex-1">Add Student</button></div>
-                </form>
+            <Modal show={showStudentModal} onClose={() => { setShowStudentModal(false); setEditId(null); }} title={editId ? "Edit Student" : "Add Student"}>
+                <StudentForm onSubmit={handleAddStudent} onClose={() => { setShowStudentModal(false); setEditId(null); }} formData={studentFormData} setFormData={setStudentFormData} users={users} buses={buses} isEdit={!!editId} />
             </Modal>
             <Modal show={showDriverModal} onClose={() => setShowDriverModal(false)} title="Add New Driver">
-                <p className="text-xs text-surface-400 dark:text-surface-500 mb-4">The driver will use these credentials to log in.</p>
-                {driverError && <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 p-3 rounded-xl mb-4 text-sm">{driverError}</div>}
-                <form onSubmit={handleAddDriver} className="space-y-4">
-                    <div><label className="label">Full Name</label><input type="text" required className="input" placeholder="e.g. Ravi Kumar" value={driverFormData.name} onChange={e => setDriverFormData({ ...driverFormData, name: e.target.value })} /></div>
-                    <div><label className="label">Email</label><input type="email" required className="input" placeholder="driver@example.com" value={driverFormData.email} onChange={e => setDriverFormData({ ...driverFormData, email: e.target.value })} /></div>
-                    <div><label className="label">Password</label><input type="password" required minLength={6} className="input" placeholder="Min. 6 characters" value={driverFormData.password} onChange={e => setDriverFormData({ ...driverFormData, password: e.target.value })} /></div>
-                    <div className="flex gap-3 mt-6"><button type="button" onClick={() => setShowDriverModal(false)} className="btn-secondary flex-1">Cancel</button><button type="submit" className="btn-primary flex-1">Create Driver</button></div>
-                </form>
+                <DriverForm onSubmit={handleAddDriver} onClose={() => setShowDriverModal(false)} formData={driverFormData} setFormData={setDriverFormData} error={driverError} />
             </Modal>
         </div >
     );

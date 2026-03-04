@@ -64,4 +64,34 @@ const assignDriver = async (req, res) => {
     }
 }
 
-module.exports = { getBuses, createBus, assignDriver };
+// @desc    Update a bus
+// @route   PUT /api/buses/:id
+const updateBus = async (req, res) => {
+    try {
+        const { busNumber, plateNumber, capacity, driverId } = req.body;
+        const updateData = { busNumber, plateNumber, capacity };
+        if (driverId !== undefined) {
+            updateData.driver = driverId === '' ? null : driverId;
+        }
+
+        const bus = await Bus.findByIdAndUpdate(req.params.id, updateData, { new: true }).populate('driver', 'name email');
+        if (!bus) return res.status(404).json({ message: 'Bus not found' });
+        res.json(bus);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// @desc    Delete a bus
+// @route   DELETE /api/buses/:id
+const deleteBus = async (req, res) => {
+    try {
+        const bus = await Bus.findByIdAndDelete(req.params.id);
+        if (!bus) return res.status(404).json({ message: 'Bus not found' });
+        res.json({ message: 'Bus removed' });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+module.exports = { getBuses, createBus, assignDriver, updateBus, deleteBus };

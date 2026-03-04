@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import Map, { Marker, NavigationControl, Source, Layer } from "react-map-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 
-import { Bus as BusIcon, Crosshair, Navigation } from 'lucide-react';
+import { Bus as BusIcon, Crosshair, Navigation, MapPin } from 'lucide-react';
 
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
@@ -11,7 +11,9 @@ const MapComponent = ({
     initialViewState = { latitude: 28.6139, longitude: 77.2090, zoom: 12 },
     markers = [],
     drawLine = null, // Expects array of coordinates: [{lat, lng}, {lat, lng}]
-    onViewportChange
+    onViewportChange,
+    onMapClick,
+    isSelecting = false
 }) => {
     const [viewState, setViewState] = useState(initialViewState);
     const [isFollowing, setIsFollowing] = useState(true);
@@ -77,7 +79,12 @@ const MapComponent = ({
                         setIsFollowing(false);
                     }
                 }}
-                style={{ width: '100%', height: '100%' }}
+                onClick={e => {
+                    if (isSelecting && onMapClick) {
+                        onMapClick({ lat: e.lngLat.lat, lng: e.lngLat.lng });
+                    }
+                }}
+                style={{ width: '100%', height: '100%', cursor: isSelecting ? 'crosshair' : 'grab' }}
                 mapStyle="mapbox://styles/mapbox/streets-v11"
                 mapboxAccessToken={MAPBOX_TOKEN}
             >
@@ -119,38 +126,31 @@ const MapComponent = ({
 
                 {markers.map((marker, index) => (
                     <Marker
-                        key={index}
+                        key={`m-${index}-${marker.lat}`}
                         latitude={Number(marker.lat)}
                         longitude={Number(marker.lng)}
-                        anchor="bottom"
+                        anchor="center"
                     >
-                        <div className={`p-2 rounded-full shadow-xl border-2 z-50 ${marker.type === 'parent' ? 'bg-green-500 border-white' :
-                            marker.type === 'stop' ? 'bg-yellow-400 border-white' :
-                                'bg-white border-indigo-600'
-                            }`}>
-                            {marker.type === 'parent' ? (
-                                <div className="w-4 h-4 bg-white rounded-full" />
-                            ) : marker.type === 'stop' ? (
-                                <div className="w-3 h-3 bg-white rounded-sm" />
-                            ) : (
-                                <BusIcon size={24} className="text-indigo-600 fill-current" />
-                            )}
+                        <div className="flex flex-col items-center" style={{ zIndex: 1000 + index }}>
+                            <div className={`text-white text-[9px] px-1.5 py-0.5 rounded-full mb-1 font-bold uppercase shadow-sm ${marker.type === 'stop' ? 'bg-yellow-600' : 'bg-brand-600'
+                                }`}>
+                                {marker.type === 'stop' ? 'Pickup' : (marker.type || 'Bus')}
+                            </div>
+                            <div className={`w-7 h-7 rounded-full border-2 border-white shadow-xl flex items-center justify-center transition-all ${marker.type === 'stop' ? 'bg-yellow-500 scale-110 ring-4 ring-yellow-500/20' : 'bg-brand-600 ring-4 ring-brand-500/20'
+                                }`}>
+                                {marker.type === 'stop' ? (
+                                    <MapPin size={16} className="text-white fill-current" />
+                                ) : (
+                                    <BusIcon size={18} className="text-white fill-current" />
+                                )}
+                            </div>
                         </div>
                     </Marker>
                 ))}
             </Map>
 
             {/* Floating Control Buttons */}
-            <div className="absolute bottom-6 right-4 flex flex-col gap-3">
-
-                {/* Locate Me Button */}
-                <button
-                    onClick={centerOnUser}
-                    className="bg-white p-3 rounded-full shadow-lg text-gray-700 hover:bg-gray-50 active:scale-95 transition-all"
-                    title="Center on My Location"
-                >
-                    <Crosshair size={24} />
-                </button>
+            <div className="absolute bottom-6 left-4 flex flex-col gap-3">
 
                 {/* Follow Bus Button */}
                 <button

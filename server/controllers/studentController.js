@@ -55,8 +55,36 @@ const createStudent = async (req, res) => {
     }
 };
 
+// @desc    Update a student
+// @route   PUT /api/students/:id
+const updateStudent = async (req, res) => {
+    try {
+        const student = await Student.findByIdAndUpdate(req.params.id, req.body, { new: true })
+            .populate('parent', 'name email')
+            .populate('bus', 'busNumber plateNumber');
+        if (!student) return res.status(404).json({ message: 'Student not found' });
+        res.json(student);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// @desc    Delete a student
+// @route   DELETE /api/students/:id
+const deleteStudent = async (req, res) => {
+    try {
+        const student = await Student.findByIdAndDelete(req.params.id);
+        if (!student) return res.status(404).json({ message: 'Student not found' });
+        res.json({ message: 'Student removed' });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
 module.exports = {
     getStudents,
     getMyStudents,
     createStudent,
+    updateStudent,
+    deleteStudent
 };

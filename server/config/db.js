@@ -19,9 +19,7 @@ const connectDB = async () => {
         role: "admin"
       });
       console.log(`[INIT] Default admin created: ${adminEmail} / ${password}`);
-    } else {
-      console.log(`[INIT] Admin already exists: ${adminEmail}`);
-    }
+    } 
   } catch (error) {
     console.error(`Error: ${error.message}`);
     process.exit(1);

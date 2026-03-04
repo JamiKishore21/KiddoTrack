@@ -23,7 +23,8 @@ const DriverDashboard = () => {
     // Communication State
     const [statusMessage, setStatusMessage] = useState('');
     const [statusType, setStatusType] = useState('info');
-    const [parentMessages, setParentMessages] = useState([]);
+    const [chatMessages, setChatMessages] = useState([]);
+    const [replyMsg, setReplyMsg] = useState('');
     const messagesEndRef = useRef(null);
 
     useEffect(() => {
@@ -47,6 +48,19 @@ const DriverDashboard = () => {
         }
     }, []);
 
+    const fetchChatHistory = async (busId) => {
+        try {
+            const token = JSON.parse(localStorage.getItem('userInfo'))?.token;
+            if (!token) return;
+            const { data } = await axios.get(`${API_URL}/messages/bus/${busId}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setChatMessages(data);
+        } catch (error) {
+            console.error('Error fetching chat history:', error);
+        }
+    };
+
     useEffect(() => { if (isSharing && selectedBus && !watchIdRef.current) startSharing(); }, [isSharing, selectedBus]);
 
     useEffect(() => {
@@ -54,6 +68,7 @@ const DriverDashboard = () => {
         axios.get(`${API_URL}/routes`).then(({ data }) => {
             setAssignedRoute(data.find(r => r.assignedBus?._id === selectedBus._id) || null);
         }).catch(console.error);
+        fetchChatHistory(selectedBus.busNumber);
     }, [selectedBus]);
 
     useEffect(() => {
@@ -62,8 +77,9 @@ const DriverDashboard = () => {
             socket.on('activeParentsList', (list) => { const map = {}; list.forEach(p => { map[p.studentName] = { lat: p.lat, lng: p.lng, type: 'parent', studentName: p.studentName }; }); setOnlineParents(prev => ({ ...prev, ...map })); });
             socket.on('parentLocationUpdate', (d) => setOnlineParents(prev => ({ ...prev, [d.studentName]: { lat: d.lat, lng: d.lng, type: 'parent', studentName: d.studentName } })));
             socket.on('parentLeft', (d) => setOnlineParents(prev => { const n = { ...prev }; delete n[d.studentName]; return n; }));
-            socket.on('incomingParentMessage', (data) => setParentMessages(prev => [data, ...prev]));
+            socket.on('incomingParentMessage', (data) => setChatMessages(prev => [data, ...prev].slice(0, 100)));
             socket.emit('joinRoom', `bus_${selectedBus.busNumber}_driver`);
+            socket.emit('joinRoom', `bus_${selectedBus.busNumber}`); // Also join general room to hear driver replies from other sessions? Optional.
         }
         return () => { socket.off('parentLocationUpdate'); socket.off('activeParentsList'); socket.off('parentLeft'); socket.disconnect(); if (watchIdRef.current) navigator.geolocation.clearWatch(watchIdRef.current); };
     }, [selectedBus]);
@@ -80,10 +96,20 @@ const DriverDashboard = () => {
         if (!selectedBus) return;
         setIsSharing(true); setStatus('Transmitting...');
         localStorage.setItem('driver_active_bus', selectedBus._id); localStorage.setItem('driver_is_sharing', 'true');
+
+        // Initial "I'm online" heartbeat
+        socket.emit('driverLocation', {
+            busId: selectedBus.busNumber,
+            lat: location?.lat || null,
+            lng: location?.lng || null,
+            driverName: user?.name,
+            status: 'starting'
+        });
+
         if (!navigator.geolocation) { alert('Geolocation not supported'); return; }
         if (watchIdRef.current) return;
         watchIdRef.current = navigator.geolocation.watchPosition(
-            (pos) => { const { latitude, longitude, speed, heading } = pos.coords; setLocation({ lat: latitude, lng: longitude }); if (selectedBus) socket.emit('driverLocation', { busId: selectedBus.busNumber, lat: latitude, lng: longitude, speed, heading }); },
+            (pos) => { const { latitude, longitude, speed, heading } = pos.coords; setLocation({ lat: latitude, lng: longitude }); if (selectedBus) socket.emit('driverLocation', { busId: selectedBus.busNumber, lat: latitude, lng: longitude, speed, heading, driverName: user?.name }); },
             (err) => { console.error(err); setStatus('Error: ' + err.message); },
             { enableHighAccuracy: true, timeout: 30000, maximumAge: 10000 }
         );
@@ -107,6 +133,24 @@ const DriverDashboard = () => {
             driverName: user?.name || 'Driver'
         });
         setStatusMessage('');
+    };
+
+    const handleSendReply = (e) => {
+        e.preventDefault();
+        if (!replyMsg.trim() || !selectedBus) return;
+
+        const timestamp = new Date().toISOString();
+        const msgData = {
+            busId: selectedBus.busNumber,
+            message: replyMsg.trim(),
+            driverName: user?.name || 'Driver',
+            timestamp,
+            sender: 'driver'
+        };
+
+        socket.emit('driverMessage', msgData);
+        setChatMessages(prev => [msgData, ...prev].slice(0, 100));
+        setReplyMsg('');
     };
 
     return (
@@ -195,68 +239,145 @@ const DriverDashboard = () => {
 
                     {/* Status Update Broadcaster */}
                     <div className="bg-surface-50 dark:bg-surface-900 p-4 rounded-2xl border border-surface-200 dark:border-surface-700/40">
-                        <h3 className="text-xs font-bold text-surface-900 dark:text-white mb-3 flex items-center gap-2">
-                            <Send size={14} className="text-brand-500" /> Broadcast Status
-                        </h3>
-                        <form onSubmit={handleSendStatus} className="space-y-3">
-                            <div className="flex gap-1.5">
-                                {[
-                                    { type: 'info', icon: <Info size={12} /> },
-                                    { type: 'delay', icon: <AlertTriangle size={12} /> },
-                                    { type: 'emergency', icon: <Siren size={12} /> },
-                                ].map(({ type, icon }) => (
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-xs font-bold text-surface-900 dark:text-white flex items-center gap-2">
+                                <Send size={14} className="text-brand-500" /> Broadcast Status
+                            </h3>
+                        </div>
+
+                        {/* Tabs */}
+                        <div className="flex p-1 bg-surface-100 dark:bg-surface-800 rounded-xl mb-4">
+                            {['delay', 'emergency', 'info'].map((tab) => (
+                                <button
+                                    key={tab}
+                                    onClick={() => setStatusType(tab)}
+                                    className={`flex-1 py-1.5 text-[10px] font-bold rounded-lg transition-all capitalize ${statusType === tab
+                                        ? 'bg-white dark:bg-surface-700 text-brand-600 dark:text-brand-400 shadow-sm'
+                                        : 'text-surface-500 hover:text-surface-700 dark:hover:text-surface-300'
+                                        }`}
+                                >
+                                    {tab}
+                                </button>
+                            ))}
+                        </div>
+
+                        <div className="space-y-3">
+                            {statusType === 'delay' && (
+                                <div className="grid grid-cols-2 gap-2">
+                                    {[
+                                        { label: 'Traffic Jam', msg: 'Stuck in heavy traffic. Expect slight delay.' },
+                                        { label: 'Breakdown', msg: 'Vehicle breakdown. Waiting for assistance.' },
+                                        { label: 'Weather', msg: 'Slow driving due to poor weather conditions.' },
+                                        { label: 'Late Start', msg: 'Bus starting late from school today.' },
+                                    ].map((item) => (
+                                        <button
+                                            key={item.label}
+                                            onClick={() => {
+                                                socket.emit('driverStatusUpdate', {
+                                                    busId: selectedBus.busNumber,
+                                                    message: item.msg,
+                                                    type: 'delay',
+                                                    driverName: user?.name || 'Driver'
+                                                });
+                                                notify.success('Delay broadcast sent');
+                                            }}
+                                            className="py-2 px-3 bg-yellow-50 dark:bg-yellow-900/10 border border-yellow-200 dark:border-yellow-800/40 text-yellow-700 dark:text-yellow-400 rounded-xl text-[10px] font-bold hover:bg-yellow-100 transition-colors"
+                                        >
+                                            {item.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+
+                            {statusType === 'emergency' && (
+                                <div className="grid grid-cols-2 gap-2">
+                                    {[
+                                        { label: 'Accident', msg: 'Emergency: Minor accident occurred. All safe.' },
+                                        { label: 'Medical', msg: 'Medical emergency on board. Stopping now.' },
+                                        { label: 'Brake Issue', msg: 'Mechanical failure. Stopping immediately.' },
+                                        { label: 'Needs Help', msg: 'Assistance required immediately at current location.' },
+                                    ].map((item) => (
+                                        <button
+                                            key={item.label}
+                                            onClick={() => {
+                                                socket.emit('driverStatusUpdate', {
+                                                    busId: selectedBus.busNumber,
+                                                    message: item.msg,
+                                                    type: 'emergency',
+                                                    driverName: user?.name || 'Driver'
+                                                });
+                                                notify.error('Emergency alert sent!');
+                                            }}
+                                            className="py-2 px-3 bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800/40 text-red-700 dark:text-red-400 rounded-xl text-[10px] font-bold hover:bg-red-100 transition-colors"
+                                        >
+                                            {item.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+
+                            {statusType === 'info' && (
+                                <form onSubmit={handleSendStatus} className="space-y-3">
+                                    <textarea
+                                        rows={2}
+                                        className="input py-2 text-xs resize-none"
+                                        placeholder="Type custom info message..."
+                                        value={statusMessage}
+                                        onChange={e => setStatusMessage(e.target.value)}
+                                    />
                                     <button
-                                        key={type}
-                                        type="button"
-                                        onClick={() => setStatusType(type)}
-                                        className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-xl text-[10px] font-bold border transition-all ${statusType === type
-                                            ? 'bg-brand-500 border-brand-500 text-white shadow-sm'
-                                            : 'bg-white dark:bg-surface-800 border-surface-200 dark:border-surface-700/50 text-surface-500'
-                                            }`}
+                                        type="submit"
+                                        disabled={!statusMessage.trim() || !selectedBus}
+                                        className="btn-secondary w-full py-2 text-xs flex items-center justify-center gap-2"
                                     >
-                                        {icon} {type.toUpperCase()}
+                                        <Send size={14} /> Send Custom Info
                                     </button>
-                                ))}
-                            </div>
-                            <textarea
-                                rows={2}
-                                className="input py-2 text-xs resize-none"
-                                placeholder="Message to parents..."
-                                value={statusMessage}
-                                onChange={e => setStatusMessage(e.target.value)}
-                            />
-                            <button
-                                type="submit"
-                                disabled={!statusMessage.trim() || !selectedBus}
-                                className="btn-secondary w-full py-2 text-xs flex items-center justify-center gap-2"
-                            >
-                                <Send size={14} /> Send Broadcast
-                            </button>
-                        </form>
+                                </form>
+                            )}
+                        </div>
                     </div>
 
                     {/* Messages from Parents */}
-                    <div className="bg-surface-50 dark:bg-surface-900 p-4 rounded-2xl border border-surface-200 dark:border-surface-700/40">
-                        <h3 className="text-xs font-bold text-surface-900 dark:text-white mb-3 flex items-center gap-2">
-                            <MessageSquare size={14} className="text-brand-500" /> Parent Messages
-                            {parentMessages.length > 0 && <span className="badge badge-info text-[10px] px-1.5 py-0 min-w-[18px] text-center">{parentMessages.length}</span>}
+                    <div className="bg-surface-50 dark:bg-surface-900 p-4 rounded-2xl border border-surface-200 dark:border-surface-700/40 flex flex-col min-h-0">
+                        <h3 className="text-xs font-bold text-surface-900 dark:text-white mb-3 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <MessageSquare size={14} className="text-brand-500" /> Persistent Chat
+                                {chatMessages.length > 0 && <span className="badge badge-info text-[10px] px-1.5 py-0 min-w-[18px] text-center">{chatMessages.length}</span>}
+                            </div>
                         </h3>
-                        <div className="space-y-2 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
-                            {parentMessages.length === 0 ? (
+
+                        <div className="flex-1 space-y-2 overflow-y-auto pr-1 custom-scrollbar flex flex-col-reverse mb-3 min-h-[150px]">
+                            {chatMessages.length === 0 ? (
                                 <p className="text-[10px] text-surface-400 text-center py-4 italic">No messages yet</p>
                             ) : (
-                                parentMessages.map((msg, i) => (
-                                    <div key={i} className="bg-white dark:bg-surface-800 rounded-xl p-2.5 border border-surface-200/50 dark:border-surface-700/30">
-                                        <div className="flex justify-between items-center mb-1">
-                                            <span className="font-bold text-[10px] text-brand-600 dark:text-brand-400 capitalize">{msg.studentName || 'Parent'}</span>
-                                            <span className="text-[8px] text-surface-400 font-mono">{new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                chatMessages.map((msg, i) => (
+                                    <div key={i} className={`rounded-xl p-2 border ${msg.sender === 'driver' ? 'bg-brand-50/50 dark:bg-brand-900/10 border-brand-100/50 dark:border-brand-500/20 self-end max-w-[90%]' : 'bg-white dark:bg-surface-800 border-surface-200/50 dark:border-surface-700/30 self-start max-w-[90%]'}`}>
+                                        <div className="flex justify-between items-center mb-1 gap-4">
+                                            <span className="font-bold text-[9px] text-brand-600 dark:text-brand-400 capitalize truncate">{msg.sender === 'driver' ? 'Me (Driver)' : (msg.studentName || 'Parent')}</span>
+                                            <span className="text-[8px] text-surface-400 font-mono shrink-0">{new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                                         </div>
-                                        <p className="text-[11px] text-surface-600 dark:text-surface-300 leading-snug">{msg.message}</p>
+                                        <p className="text-[10px] text-surface-600 dark:text-surface-300 leading-tight">{msg.message}</p>
                                     </div>
                                 ))
                             )}
-                            <div ref={messagesEndRef} />
                         </div>
+
+                        <form onSubmit={handleSendReply} className="flex gap-2">
+                            <input
+                                type="text"
+                                className="flex-1 bg-white dark:bg-surface-800 border-surface-200 dark:border-surface-700 rounded-xl px-3 py-2 text-[11px] focus:ring-1 focus:ring-brand-500 focus:outline-none dark:text-white"
+                                placeholder="Message parents..."
+                                value={replyMsg}
+                                onChange={e => setReplyMsg(e.target.value)}
+                            />
+                            <button
+                                type="submit"
+                                disabled={!replyMsg.trim() || !selectedBus}
+                                className="bg-brand-600 hover:bg-brand-700 text-white p-2 rounded-xl transition-all active:scale-95"
+                            >
+                                <Send size={14} />
+                            </button>
+                        </form>
                     </div>
 
                     <p className="text-center text-[10px] text-surface-400 dark:text-surface-500 pt-2 italic">Keep this tab open for background tracking.</p>
