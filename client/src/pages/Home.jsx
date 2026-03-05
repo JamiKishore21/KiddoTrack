@@ -5,14 +5,10 @@ import ThemeToggle from '../components/ThemeToggle';
 
 const Home = () => {
     return (
-        <div className="min-h-screen-safe relative overflow-hidden
-            bg-gradient-to-br from-surface-50 via-white to-orange-50
-            dark:from-surface-950 dark:via-surface-900 dark:to-surface-950">
+        <div className="min-h-screen-safe relative overflow-hidden bg-surface-50 dark:bg-surface-950">
 
-            {/* Floating decorative orbs */}
-            <div className="absolute top-20 -left-20 w-72 h-72 bg-brand-400/15 dark:bg-brand-500/8 rounded-full blur-3xl animate-float" />
-            <div className="absolute bottom-20 -right-20 w-96 h-96 bg-amber-400/15 dark:bg-amber-600/5 rounded-full blur-3xl animate-float" style={{ animationDelay: '3s' }} />
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-brand-300/8 dark:bg-brand-500/3 rounded-full blur-3xl" />
+            {/* Simple Grid Background */}
+            <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:32px_32px] opacity-20 dark:opacity-10 pointer-events-none" />
 
             {/* Theme Toggle */}
             <div className="absolute top-4 right-4 sm:top-6 sm:right-6 z-20">
@@ -24,8 +20,7 @@ const Home = () => {
 
                 {/* Logo */}
                 <div className="relative mb-8">
-                    <div className="absolute inset-0 bg-brand-500/20 dark:bg-brand-400/15 rounded-3xl blur-xl scale-150" />
-                    <div className="relative bg-gradient-to-br from-brand-500 to-brand-700 dark:from-brand-400 dark:to-brand-600 p-5 rounded-3xl shadow-glow">
+                    <div className="relative bg-brand-600 dark:bg-brand-500 p-5 rounded-3xl shadow-lg shadow-brand-500/20">
                         <Bus size={36} className="text-white" />
                     </div>
                 </div>

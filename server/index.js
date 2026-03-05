@@ -55,6 +55,15 @@ io.on('connection', (socket) => {
         socket.join(room);
         console.log(`User ${socket.id} joined room: ${room}`);
 
+        // If a PARENT joins a bus room, send them current location immediately if available
+        if (room.startsWith('bus_') && !room.endsWith('_driver')) {
+            const busId = room.split('_')[1];
+            if (activeBusSessions[busId]) {
+                socket.emit('busLocationUpdate', activeBusSessions[busId]);
+                console.log(`[SOCKET] Immediate location sync for bus ${busId} to parent ${socket.id}`);
+            }
+        }
+
         // If a DRIVER joins, send them the list of currently online parents immediately
         if (room.endsWith('_driver')) {
             const busId = room.split('_')[1]; // Extract ID from "bus_123_driver"
@@ -78,6 +87,11 @@ io.on('connection', (socket) => {
 
     // Driver sends location
     socket.on('driverLocation', async (data) => {
+        // VALIDATION: Ignore invalid (0,0) or missing coordinates
+        if (!data.lat || !data.lng || (Number(data.lat) === 0 && Number(data.lng) === 0)) {
+            return;
+        }
+
         // Cache this bus location (RAM)
         activeBusSessions[data.busId] = data;
 
@@ -87,7 +101,6 @@ io.on('connection', (socket) => {
 
         // PERSISTENCE LAYER
         try {
-            // 1. Update "Last Known" (Fast, Single Record)
             await Bus.findOneAndUpdate(
                 { busNumber: data.busId },
                 {
@@ -101,15 +114,11 @@ io.on('connection', (socket) => {
                 }
             );
 
-            // 2. Append to History Log (For Police/Investigation)
-            // We use 'await' but inside a non-blocking Promise.all if high load, 
-            // but for now simple await is fine or fire-and-forget without await.
-            // Using create is safer for logs.
             await LocationHistory.create({
                 busId: data.busId,
                 lat: data.lat,
                 lng: data.lng,
-                speed: data.speed, // Useful for accident reconstruction
+                speed: data.speed,
                 heading: data.heading
             });
 
@@ -130,11 +139,79 @@ io.on('connection', (socket) => {
         console.log(`Bus ${data.busId} ended session.`);
     });
 
+    const { calculateDelay, formatMinutesToTime, parseTimeToMinutes } = require('./utils/timeUtils');
+
+    // Driver marks a stop as reached/left
+    socket.on('stopReached', async (data) => {
+        // data: { busId, stopIndex, status, stopName, timestamp }
+        const payload = { ...data, timestamp: data.timestamp || new Date().toISOString() };
+        try {
+            const Bus = require('./models/Bus');
+            const Route = require('./models/Route');
+            const bus = await Bus.findOne({ busNumber: data.busId });
+            if (bus) {
+                const route = await Route.findOne({ assignedBus: bus._id });
+                if (route && route.stops[data.stopIndex]) {
+                    const currentStop = route.stops[data.stopIndex];
+                    currentStop.status = data.status;
+
+                    if (data.status === 'reached') {
+                        // Calculate delay based on scheduled arrivalTime
+                        const delay = calculateDelay(currentStop.arrivalTime);
+                        currentStop.delayMinutes = delay;
+                        currentStop.actualTime = formatMinutesToTime(new Date().getHours() * 60 + new Date().getMinutes());
+
+                        // Propagate delay to all future stops
+                        for (let i = data.stopIndex + 1; i < route.stops.length; i++) {
+                            route.stops[i].delayMinutes = delay;
+                        }
+                    } else if (data.status === 'left') {
+                        // Maintain the last known delay if bus has left
+                    }
+
+                    route.markModified('stops');
+                    await route.save();
+
+                    // Broadcast updated route to everyone
+                    payload.updatedStops = route.stops;
+                }
+            }
+        } catch (err) { console.error('[STOP] DB save error:', err.message); }
+        io.to(`bus_${data.busId}`).emit('stopStatusUpdate', payload);
+        io.to('admin_room').emit('stopStatusUpdate', payload);
+    });
+
+    // Reset Trip Logic
+    socket.on('resetTrip', async (data) => {
+        // data: { busId }
+        try {
+            const Bus = require('./models/Bus');
+            const Route = require('./models/Route');
+            const bus = await Bus.findOne({ busNumber: data.busId });
+            if (bus) {
+                const route = await Route.findOne({ assignedBus: bus._id });
+                if (route) {
+                    route.stops.forEach(s => s.status = 'pending');
+                    route.markModified('stops');
+                    await route.save();
+
+                    // Broadcast reset to everyone
+                    io.to(`bus_${data.busId}`).emit('tripReset', { busId: data.busId });
+                    io.to('admin_room').emit('tripReset', { busId: data.busId });
+                    console.log(`[RESET] Bus ${data.busId} trip reset.`);
+                }
+            }
+        } catch (err) {
+            console.error('[RESET] Error:', err.message);
+        }
+    });
+
     // Driver broadcasts a status/traffic update to all parents on this bus AND Admin
     socket.on('driverStatusUpdate', async (data) => {
         // data: { busId, message, type, driverName } — type: 'info' | 'delay' | 'emergency'
         const broadcastData = {
             ...data,
+            readBy: [],
             timestamp: new Date().toISOString()
         };
 
@@ -164,8 +241,8 @@ io.on('connection', (socket) => {
             timestamp
         };
 
-        // Broadcast to driver
-        io.to(`bus_${data.busId}_driver`).emit('incomingParentMessage', msgPayload);
+        // Broadcast to driver (excluding sender if they were in the room, but parents send from private state)
+        socket.to(`bus_${data.busId}_driver`).emit('incomingParentMessage', msgPayload);
 
         // Save to DB for persistence
         try {
@@ -194,8 +271,8 @@ io.on('connection', (socket) => {
             sender: 'driver'
         };
 
-        // Broadcast to all parents tracking this bus
-        io.to(`bus_${data.busId}`).emit('incomingParentMessage', msgPayload);
+        // Broadcast to all parents tracking this bus (excluding the driver themselves)
+        socket.to(`bus_${data.busId}`).emit('incomingParentMessage', msgPayload);
 
         // Save to DB
         try {
@@ -209,18 +286,20 @@ io.on('connection', (socket) => {
         } catch (dbErr) {
             console.error('[DB ERR] Failed to save driver message:', dbErr);
         }
-
         console.log(`[MSG] Driver of Bus ${data.busId} → Parents: ${data.message}`);
     });
 
     // Parent sends location (for Driver to see)
     socket.on('parentLocation', (data) => {
-        // Cache this session
-        parentSessions[socket.id] = data;
+        // Only cache and broadcast if coordinates are valid
+        if (data.lat && data.lng && (Number(data.lat) !== 0 || Number(data.lng) !== 0)) {
+            // Cache this session
+            parentSessions[socket.id] = data;
 
-        // Broadcast ONLY to the driver of this bus
-        io.to(`bus_${data.busId}_driver`).emit('parentLocationUpdate', data);
-        console.log(`[SOCKET] Parent of ${data.studentName} sent location to bus_${data.busId}_driver`);
+            // Broadcast ONLY to the driver of this bus
+            io.to(`bus_${data.busId}_driver`).emit('parentLocationUpdate', data);
+            console.log(`[SOCKET] Parent of ${data.studentName} sent location to bus_${data.busId}_driver`);
+        }
     });
 
     socket.on('disconnect', () => {

@@ -3,9 +3,10 @@ import { socket } from '../socket';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import MapComponent from '../components/MapComponent';
-import { Play, Square, MapPin, LogOut, Radio, Send, AlertTriangle, Info, Siren, MessageSquare } from 'lucide-react';
+import { Play, Square, MapPin, LogOut, Radio, Send, AlertTriangle, Info, Siren, MessageSquare, Route, X, Map } from 'lucide-react';
 import ThemeToggle from '../components/ThemeToggle';
 import { API_URL } from '../constants';
+import { fetchRoadRoute } from '../utils/fetchRoadRoute';
 
 const DriverDashboard = () => {
     const { user, logout } = useAuth();
@@ -17,8 +18,16 @@ const DriverDashboard = () => {
     const [availableBuses, setAvailableBuses] = useState([]);
     const [assignedRoute, setAssignedRoute] = useState(null);
     const [mapMarkers, setMapMarkers] = useState([]);
-    const [panelExpanded, setPanelExpanded] = useState(true);
+    const [panelExpanded, setPanelExpanded] = useState(false);
     const [onlineParents, setOnlineParents] = useState({});
+    const [stopStatuses, setStopStatuses] = useState(() => {
+        try {
+            const saved = localStorage.getItem('driver_stop_statuses');
+            return saved ? JSON.parse(saved) : {};
+        } catch { return {}; }
+    });
+    const [roadGeometry, setRoadGeometry] = useState(null);
+    const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
 
     // Communication State
     const [statusMessage, setStatusMessage] = useState('');
@@ -26,6 +35,25 @@ const DriverDashboard = () => {
     const [chatMessages, setChatMessages] = useState([]);
     const [replyMsg, setReplyMsg] = useState('');
     const messagesEndRef = useRef(null);
+
+    // All Routes View
+    const [showAllRoutes, setShowAllRoutes] = useState(false);
+    const [allRoutes, setAllRoutes] = useState([]);
+
+    const fetchAllRoutes = async () => {
+        try {
+            const { data } = await axios.get(`${API_URL}/routes`);
+            setAllRoutes(data);
+        } catch (error) {
+            console.error('Error fetching all routes:', error);
+        }
+    };
+
+    useEffect(() => {
+        if (showAllRoutes && allRoutes.length === 0) {
+            fetchAllRoutes();
+        }
+    }, [showAllRoutes]);
 
     useEffect(() => {
         axios.get(`${API_URL}/buses`)
@@ -66,7 +94,14 @@ const DriverDashboard = () => {
     useEffect(() => {
         if (!selectedBus) { setAssignedRoute(null); return; }
         axios.get(`${API_URL}/routes`).then(({ data }) => {
-            setAssignedRoute(data.find(r => r.assignedBus?._id === selectedBus._id) || null);
+            const route = data.find(r => r.assignedBus?._id === selectedBus._id) || null;
+            setAssignedRoute(route);
+            // Initialize stop statuses from DB
+            if (route?.stops) {
+                const dbStatuses = {};
+                route.stops.forEach((s, i) => { if (s.status && s.status !== 'pending') dbStatuses[i] = s.status; });
+                setStopStatuses(prev => ({ ...dbStatuses, ...JSON.parse(localStorage.getItem('driver_stop_statuses') || '{}') }));
+            }
         }).catch(console.error);
         fetchChatHistory(selectedBus.busNumber);
     }, [selectedBus]);
@@ -77,20 +112,173 @@ const DriverDashboard = () => {
             socket.on('activeParentsList', (list) => { const map = {}; list.forEach(p => { map[p.studentName] = { lat: p.lat, lng: p.lng, type: 'parent', studentName: p.studentName }; }); setOnlineParents(prev => ({ ...prev, ...map })); });
             socket.on('parentLocationUpdate', (d) => setOnlineParents(prev => ({ ...prev, [d.studentName]: { lat: d.lat, lng: d.lng, type: 'parent', studentName: d.studentName } })));
             socket.on('parentLeft', (d) => setOnlineParents(prev => { const n = { ...prev }; delete n[d.studentName]; return n; }));
+            socket.on('stopStatusUpdate', (data) => {
+                if (data.updatedStops) {
+                    setAssignedRoute(prev => ({ ...prev, stops: data.updatedStops }));
+                }
+            });
             socket.on('incomingParentMessage', (data) => setChatMessages(prev => [data, ...prev].slice(0, 100)));
+            socket.on('tripReset', () => {
+                setStopStatuses({});
+                localStorage.removeItem('driver_stop_statuses');
+                if (assignedRoute) {
+                    const resetRoute = { ...assignedRoute };
+                    resetRoute.stops = resetRoute.stops.map(s => ({ ...s, status: 'pending' }));
+                    setAssignedRoute(resetRoute);
+                }
+            });
             socket.emit('joinRoom', `bus_${selectedBus.busNumber}_driver`);
-            socket.emit('joinRoom', `bus_${selectedBus.busNumber}`); // Also join general room to hear driver replies from other sessions? Optional.
+            socket.emit('joinRoom', `bus_${selectedBus.busNumber}`);
         }
-        return () => { socket.off('parentLocationUpdate'); socket.off('activeParentsList'); socket.off('parentLeft'); socket.disconnect(); if (watchIdRef.current) navigator.geolocation.clearWatch(watchIdRef.current); };
+        return () => {
+            socket.off('activeParentsList');
+            socket.off('parentLocationUpdate');
+            socket.off('parentLeft');
+            socket.off('incomingParentMessage');
+            socket.off('tripReset');
+            if (watchIdRef.current) navigator.geolocation.clearWatch(watchIdRef.current);
+        };
     }, [selectedBus]);
+
+    // Cleanup on unmount
+    useEffect(() => {
+        return () => {
+            socket.disconnect();
+            if (watchIdRef.current) navigator.geolocation.clearWatch(watchIdRef.current);
+        };
+    }, []);
 
     useEffect(() => {
         const markers = [];
-        if (location) markers.push({ lat: location.lat, lng: location.lng, type: 'bus' });
-        if (assignedRoute?.stops) assignedRoute.stops.forEach(s => { if (s.location?.lat) markers.push({ lat: s.location.lat, lng: s.location.lng, type: 'stop', studentName: s.name }); });
+        if (location) markers.push({
+            lat: location.lat,
+            lng: location.lng,
+            type: 'bus',
+            busId: selectedBus?.busNumber
+        });
+        if (assignedRoute?.stops) assignedRoute.stops.forEach((s, i) => {
+            if (s.location?.lat) markers.push({
+                lat: s.location.lat, lng: s.location.lng, type: 'stop',
+                studentName: s.name, stopNumber: i + 1,
+                stopStatus: stopStatuses[i] || 'pending'
+            });
+        });
         Object.values(onlineParents).forEach(p => markers.push(p));
         setMapMarkers(markers);
-    }, [location, assignedRoute, onlineParents]);
+    }, [location, assignedRoute, onlineParents, stopStatuses]);
+
+    // Fetch road-following route geometry
+    useEffect(() => {
+        if (assignedRoute?.stops?.length >= 2) {
+            const waypoints = assignedRoute.stops.filter(s => s.location?.lat).map(s => ({ lat: s.location.lat, lng: s.location.lng }));
+            fetchRoadRoute(waypoints, MAPBOX_TOKEN).then(geo => setRoadGeometry(geo));
+        } else {
+            setRoadGeometry(null);
+        }
+    }, [assignedRoute]);
+
+    const calculateDistance = (lat1, lon1, lat2, lon2) => {
+        const R = 6371; // km
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
+    };
+
+    const handleResetTrip = () => {
+        if (!selectedBus) return;
+        if (window.confirm("This will reset all stop statuses for this route. Start new trip?")) {
+            socket.emit('resetTrip', { busId: selectedBus.busNumber });
+            setStopStatuses({});
+            localStorage.removeItem('driver_stop_statuses');
+        }
+    };
+
+    const markStop = (index, status) => {
+        setStopStatuses(prev => {
+            const updated = { ...prev, [index]: status };
+            localStorage.setItem('driver_stop_statuses', JSON.stringify(updated));
+            return updated;
+        });
+        if (selectedBus && assignedRoute) {
+            socket.emit('stopReached', {
+                busId: selectedBus.busNumber,
+                stopIndex: index,
+                status,
+                stopName: assignedRoute.stops[index]?.name || `Stop ${index + 1}`,
+                timestamp: new Date().toISOString()
+            });
+        }
+    };
+
+    const startSimulation = () => {
+        if (!assignedRoute || !assignedRoute.stops || assignedRoute.stops.length === 0) {
+            alert("No assigned route to simulate.");
+            return;
+        }
+
+        setIsSimulating(true);
+        setStatus('Testing: Moving...');
+        let currentPointIdx = 0;
+
+        let path = [];
+        if (roadGeometry && roadGeometry.length > 0) {
+            path = roadGeometry;
+        } else {
+            path = assignedRoute.stops.filter(s => s.location?.lat).map(s => ({ lat: s.location.lat, lng: s.location.lng }));
+        }
+
+        if (path.length === 0) {
+            alert("No valid coordinates found in route to simulate.");
+            setIsSimulating(false);
+            return;
+        }
+
+        simIntervalRef.current = setInterval(() => {
+            if (currentPointIdx >= path.length) {
+                clearInterval(simIntervalRef.current);
+                setIsSimulating(false);
+                setStatus('Sim Finished');
+                return;
+            }
+
+            const point = path[currentPointIdx];
+            if (point.lat && point.lng) {
+                const simulatedLoc = { lat: point.lat, lng: point.lng };
+                setLocation(simulatedLoc);
+                socket.emit('driverLocation', {
+                    busId: selectedBus.busNumber,
+                    lat: point.lat,
+                    lng: point.lng,
+                    speed: 40,
+                    heading: 0,
+                    driverName: user?.name
+                });
+
+                assignedRoute.stops.forEach((stop, index) => {
+                    if (!stop.location?.lat) return;
+                    const d = calculateDistance(point.lat, point.lng, stop.location.lat, stop.location.lng);
+                    const currentStatus = stopStatuses[index] || 'pending';
+                    if (d < 0.08 && currentStatus === 'pending') {
+                        markStop(index, 'reached');
+                    }
+                });
+            }
+            currentPointIdx++;
+        }, 3000);
+    };
+
+    const stopSimulation = () => {
+        if (simIntervalRef.current) {
+            clearInterval(simIntervalRef.current);
+            simIntervalRef.current = null;
+        }
+        setIsSimulating(false);
+        setStatus('Sim Stopped');
+    };
 
     const startSharing = () => {
         if (!selectedBus) return;
@@ -98,10 +286,10 @@ const DriverDashboard = () => {
         localStorage.setItem('driver_active_bus', selectedBus._id); localStorage.setItem('driver_is_sharing', 'true');
 
         // Initial "I'm online" heartbeat
+        const initialLoc = (location?.lat && location?.lng) ? { lat: location.lat, lng: location.lng } : {};
         socket.emit('driverLocation', {
             busId: selectedBus.busNumber,
-            lat: location?.lat || null,
-            lng: location?.lng || null,
+            ...initialLoc,
             driverName: user?.name,
             status: 'starting'
         });
@@ -109,7 +297,38 @@ const DriverDashboard = () => {
         if (!navigator.geolocation) { alert('Geolocation not supported'); return; }
         if (watchIdRef.current) return;
         watchIdRef.current = navigator.geolocation.watchPosition(
-            (pos) => { const { latitude, longitude, speed, heading } = pos.coords; setLocation({ lat: latitude, lng: longitude }); if (selectedBus) socket.emit('driverLocation', { busId: selectedBus.busNumber, lat: latitude, lng: longitude, speed, heading, driverName: user?.name }); },
+            (pos) => {
+                const { latitude, longitude, speed, heading } = pos.coords;
+                // Only act on valid location
+                if (latitude && longitude && (latitude !== 0 || longitude !== 0)) {
+                    const newLoc = { lat: latitude, lng: longitude };
+                    setLocation(newLoc);
+
+                    if (selectedBus) {
+                        socket.emit('driverLocation', { busId: selectedBus.busNumber, lat: latitude, lng: longitude, speed, heading, driverName: user?.name });
+
+                        // AUTOMATIC STOP UPDATES (GEOFENCING)
+                        if (assignedRoute?.stops) {
+                            assignedRoute.stops.forEach((stop, index) => {
+                                if (!stop.location?.lat) return;
+                                const dist = calculateDistance(latitude, longitude, stop.location.lat, stop.location.lng);
+                                const currentStatus = stopStatuses[index] || 'pending';
+
+                                // Within 80 meters -> Reached
+                                if (dist < 0.08 && currentStatus === 'pending') {
+                                    markStop(index, 'reached');
+                                    console.log(`[AUTO] Reached stop ${index}: ${stop.name}`);
+                                }
+                                // Beyond 150 meters -> Left (only if it was already reached)
+                                else if (dist > 0.15 && currentStatus === 'reached') {
+                                    markStop(index, 'left');
+                                    console.log(`[AUTO] Left stop ${index}: ${stop.name}`);
+                                }
+                            });
+                        }
+                    }
+                }
+            },
             (err) => { console.error(err); setStatus('Error: ' + err.message); },
             { enableHighAccuracy: true, timeout: 30000, maximumAge: 10000 }
         );
@@ -118,6 +337,8 @@ const DriverDashboard = () => {
     const stopSharing = () => {
         setIsSharing(false); setStatus('Trip Ended');
         localStorage.removeItem('driver_is_sharing'); localStorage.removeItem('driver_active_bus');
+        localStorage.removeItem('driver_stop_statuses');
+        setStopStatuses({});
         if (selectedBus) socket.emit('driverSessionEnd', { busId: selectedBus.busNumber });
         if (watchIdRef.current) { navigator.geolocation.clearWatch(watchIdRef.current); watchIdRef.current = null; }
     };
@@ -154,17 +375,26 @@ const DriverDashboard = () => {
     };
 
     return (
-        <div className="h-screen-safe flex flex-col md:flex-row overflow-hidden bg-surface-100 dark:bg-surface-950">
+        <div className="h-screen-safe flex flex-col md:flex-row overflow-hidden bg-surface-50 dark:bg-surface-950 relative">
+            {/* Clean Background Design Elements */}
+            <div className="absolute inset-0 z-0 pointer-events-none">
+                <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:32px_32px] opacity-20 dark:opacity-10" />
+            </div>
             {/* Map */}
             <div className="flex-1 relative order-1 md:order-2 min-h-0">
                 <div className="absolute inset-0">
-                    <MapComponent markers={mapMarkers} initialViewState={{ latitude: location?.lat || 28.6139, longitude: location?.lng || 77.2090, zoom: 14 }} />
+                    <MapComponent
+                        markers={mapMarkers}
+                        drawLine={roadGeometry || (assignedRoute?.stops?.length >= 2 ? assignedRoute.stops.filter(s => s.location?.lat).map(s => ({ lat: s.location.lat, lng: s.location.lng })) : null)}
+                        initialViewState={{ latitude: location?.lat || 28.6139, longitude: location?.lng || 77.2090, zoom: 14 }}
+                    />
                 </div>
                 {/* Mobile Header */}
                 <div className="absolute top-0 left-0 right-0 z-10 md:hidden">
                     <div className="bg-glass border-b border-surface-200/50 dark:border-surface-700/40 px-4 py-3 flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                            <h1 className="text-lg font-bold text-surface-900 dark:text-white">Driver</h1>
+                            <img src="/logo.png" alt="Logo" className="w-8 h-6 object-contain" />
+                            <h1 className="text-lg font-bold text-surface-900 dark:text-white truncate max-w-[120px]">Hi, {user?.name || 'Driver'}</h1>
                             {selectedBus && <span className="badge badge-info text-[10px]">BUS-{selectedBus.busNumber}</span>}
                         </div>
                         <div className="flex items-center gap-2">
@@ -178,16 +408,23 @@ const DriverDashboard = () => {
 
             {/* Panel */}
             <div className={`order-2 md:order-1 md:w-[380px] z-20 transition-all duration-300 md:h-full
-                ${panelExpanded ? 'h-[55%]' : 'h-auto'}
-                md:relative fixed bottom-0 left-0 right-0
+                ${panelExpanded ? 'h-[70dvh]' : 'h-[130px] md:h-full'}
+                relative
                 bg-white dark:bg-surface-800 rounded-t-3xl md:rounded-none
-                border-t md:border-r border-surface-200 dark:border-surface-700/50 shadow-glass-lg md:shadow-none`}>
-                <div className="md:hidden flex justify-center pt-2 pb-1 cursor-pointer" onClick={() => setPanelExpanded(!panelExpanded)}>
+                border-t md:border-r border-surface-200 dark:border-surface-700/50 shadow-glass-lg md:shadow-none overflow-hidden flex flex-col`}>
+                <div className="md:hidden flex justify-center pt-2 pb-1 cursor-pointer flex-shrink-0" onClick={() => setPanelExpanded(!panelExpanded)}>
                     <div className="w-10 h-1 bg-surface-300 dark:bg-surface-600 rounded-full" />
                 </div>
                 <div className="p-4 md:p-6 space-y-4 overflow-y-auto max-h-full pb-8">
+                    {/* Simplified header for desktop, hidden on mobile to avoid double-headers */}
                     <div className="hidden md:flex items-center justify-between">
-                        <h1 className="text-xl font-bold text-surface-900 dark:text-white">Driver Dashboard</h1>
+                        <div className="flex items-center gap-3">
+                            <img src="/logo.png" alt="Logo" className="w-10 h-8 object-contain" />
+                            <div className="flex flex-col">
+                                <h1 className="text-xl font-bold text-surface-900 dark:text-white">Welcome, {user?.name || 'Driver'}</h1>
+                                <p className="text-xs text-brand-600 dark:text-brand-400 font-bold uppercase tracking-widest">Driver Dashboard</p>
+                            </div>
+                        </div>
                         <div className="flex items-center gap-2"><ThemeToggle /><button onClick={logout} className="btn-ghost p-1.5"><LogOut size={18} /></button></div>
                     </div>
 
@@ -213,11 +450,108 @@ const DriverDashboard = () => {
                     </div>
 
                     {assignedRoute && (
-                        <div className="bg-brand-50 dark:bg-brand-950/20 p-4 rounded-2xl border border-brand-100 dark:border-brand-900/30">
-                            <h3 className="font-bold text-brand-800 dark:text-brand-300 text-sm mb-1">{assignedRoute.name}</h3>
-                            <p className="text-xs text-brand-600 dark:text-brand-400 mb-2">{assignedRoute.stops.length} Stops</p>
-                            <div className="flex flex-wrap gap-1.5">
-                                {assignedRoute.stops.map((s, i) => <span key={i} className="bg-brand-100 dark:bg-brand-900/40 text-brand-700 dark:text-brand-300 px-2 py-0.5 rounded-full text-[10px] font-medium">{s.name}</span>)}
+                        <div className="bg-surface-50 dark:bg-surface-900 p-4 rounded-2xl border border-surface-200 dark:border-surface-700/40">
+                            <h3 className="font-bold text-brand-800 dark:text-brand-300 text-sm mb-1 flex items-center gap-2">
+                                {assignedRoute.name}
+                            </h3>
+                            <div className="flex items-center justify-between">
+                                <p className="text-[10px] text-surface-400">Manage stops & sequence</p>
+                                <button
+                                    onClick={handleResetTrip}
+                                    className="text-[11px] font-bold text-brand-600 hover:text-white hover:bg-brand-600 bg-brand-50 dark:bg-brand-900/30 px-3 py-1.5 rounded-xl transition-all border border-brand-200 dark:border-brand-800 active:scale-95 shadow-sm"
+                                >
+                                    Start New Trip
+                                </button>
+                            </div>
+                            <p className="text-xs text-surface-400 mt-2 mb-3">{assignedRoute.stops.length} Stops • Tap to mark status</p>
+
+                            {/* Stop Timeline */}
+                            <div className="relative">
+                                {/* Vertical Line */}
+                                {/* Vertical Line: Center of w-8 circle (32px) is 16px */}
+                                <div className="absolute left-[16px] top-4 bottom-4 w-0.5 bg-surface-200 dark:bg-surface-700" />
+                                <div className="space-y-1">
+                                    {assignedRoute.stops.map((stop, i) => {
+                                        const st = stop.status || 'pending';
+
+                                        // Time Shift Logic
+                                        const parseTime = (t) => {
+                                            if (!t) return null;
+                                            const m12 = t.match(/(\d+):(\d+)\s*(AM|PM)/i);
+                                            if (m12) {
+                                                let h = parseInt(m12[1]), min = parseInt(m12[2]);
+                                                if (m12[3].toUpperCase() === 'PM' && h !== 12) h += 12;
+                                                if (m12[3].toUpperCase() === 'AM' && h === 12) h = 0;
+                                                return h * 60 + min;
+                                            }
+                                            const m24 = t.match(/(\d+):(\d+)/);
+                                            if (m24) {
+                                                return parseInt(m24[1]) * 60 + parseInt(m24[2]);
+                                            }
+                                            return null;
+                                        };
+                                        const formatTime = (min) => {
+                                            let h = Math.floor(min / 60) % 24, m = min % 60;
+                                            const p = h >= 12 ? 'PM' : 'AM';
+                                            h = h % 12 || 12;
+                                            return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')} ${p}`;
+                                        };
+
+                                        const schedMin = parseTime(stop.arrivalTime);
+                                        const delay = stop.delayMinutes || 0;
+                                        const realTime = schedMin !== null ? formatTime(schedMin + delay) : null;
+
+                                        return (
+                                            <div key={i} className="flex items-start gap-3 relative">
+                                                {/* Circle */}
+                                                <div className={`z-10 w-8 h-8 rounded-full border-2 flex items-center justify-center text-xs font-bold flex-shrink-0 transition-all mt-1 ${st === 'reached' ? 'bg-green-500 border-green-600 text-white' :
+                                                    st === 'left' ? 'bg-gray-400 border-gray-500 text-white' :
+                                                        'bg-white dark:bg-surface-800 border-surface-300 dark:border-surface-600 text-surface-500'
+                                                    }`}>
+                                                    {i + 1}
+                                                </div>
+                                                {/* Info */}
+                                                <div className="flex-1 min-w-0 py-2">
+                                                    <p className={`text-xs font-semibold truncate ${st === 'left' ? 'text-surface-400 line-through' : 'text-surface-800 dark:text-surface-200'
+                                                        }`}>{stop.name}</p>
+                                                    <div className="flex flex-col gap-0.5 mt-0.5">
+                                                        {stop.arrivalTime && (
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="text-[10px] text-surface-400">Scheduled: {stop.arrivalTime}</span>
+                                                                {st === 'reached' ? (
+                                                                    <span className="text-[10px] font-bold text-green-600 dark:text-green-400">Actual: {stop.actualTime || realTime}</span>
+                                                                ) : (
+                                                                    realTime && realTime !== stop.arrivalTime && (
+                                                                        <span className={`text-[10px] font-bold ${delay > 0 ? 'text-red-500' : 'text-green-500'}`}>Est: {realTime}</span>
+                                                                    )
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                        {delay > 0 && <span className="text-[9px] font-bold text-red-500">+{delay} min delay</span>}
+                                                    </div>
+                                                </div>
+                                                {/* Action */}
+                                                {isSharing && (
+                                                    <div className="flex-shrink-0 mt-2">
+                                                        {st === 'pending' && (
+                                                            <button onClick={() => markStop(i, 'reached')} className="text-[10px] font-bold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-2 py-1 rounded-lg hover:bg-green-200 transition-colors">
+                                                                Reached
+                                                            </button>
+                                                        )}
+                                                        {st === 'reached' && (
+                                                            <button onClick={() => markStop(i, 'left')} className="text-[10px] font-bold bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 px-2 py-1 rounded-lg hover:bg-yellow-200 transition-colors">
+                                                                Bus Left
+                                                            </button>
+                                                        )}
+                                                        {st === 'left' && (
+                                                            <span className="text-[10px] font-bold text-surface-400 px-2 py-1">Done ✓</span>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
                             </div>
                         </div>
                     )}
@@ -229,13 +563,17 @@ const DriverDashboard = () => {
                         </div>
                     )}
 
-                    {!isSharing ? (
-                        <button onClick={startSharing} disabled={!selectedBus} className="btn-primary w-full flex items-center justify-center gap-2 py-4 text-base"><Play size={22} /> Start Trip</button>
-                    ) : (
-                        <button onClick={stopSharing} className="w-full py-4 bg-red-500 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg shadow-red-500/25">
-                            <Square size={22} fill="currentColor" /> Stop Trip
-                        </button>
-                    )}
+                    <div className="flex gap-2">
+                        {!isSharing ? (
+                            <button onClick={startSharing} disabled={!selectedBus} className="btn-primary w-full flex items-center justify-center gap-2 py-4 text-base shadow-lg shadow-brand-500/20">
+                                <Play size={22} fill="currentColor" /> Start Trip
+                            </button>
+                        ) : (
+                            <button onClick={stopSharing} className="w-full py-4 bg-red-500 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg shadow-red-500/25">
+                                <Square size={22} fill="currentColor" /> Stop Trip
+                            </button>
+                        )}
+                    </div>
 
                     {/* Status Update Broadcaster */}
                     <div className="bg-surface-50 dark:bg-surface-900 p-4 rounded-2xl border border-surface-200 dark:border-surface-700/40">
@@ -346,7 +684,7 @@ const DriverDashboard = () => {
                             </div>
                         </h3>
 
-                        <div className="flex-1 space-y-2 overflow-y-auto pr-1 custom-scrollbar flex flex-col-reverse mb-3 min-h-[150px]">
+                        <div className="h-[350px] space-y-2 overflow-y-auto pr-1 custom-scrollbar flex flex-col-reverse mb-3">
                             {chatMessages.length === 0 ? (
                                 <p className="text-[10px] text-surface-400 text-center py-4 italic">No messages yet</p>
                             ) : (
@@ -380,10 +718,61 @@ const DriverDashboard = () => {
                         </form>
                     </div>
 
+                    <div className="pt-2">
+                        <button
+                            onClick={() => setShowAllRoutes(true)}
+                            className="w-full flex items-center justify-center gap-2 py-3 bg-surface-100 hover:bg-surface-200 dark:bg-surface-800 dark:hover:bg-surface-700 text-brand-600 dark:text-brand-400 font-bold rounded-xl transition-colors border border-surface-200 dark:border-surface-700/50"
+                        >
+                            <Map size={18} /> View All Bus Routes
+                        </button>
+                    </div>
+
                     <p className="text-center text-[10px] text-surface-400 dark:text-surface-500 pt-2 italic">Keep this tab open for background tracking.</p>
                 </div>
             </div>
-        </div>
+            {/* All Routes Modal */}
+            {
+                showAllRoutes && (
+                    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-4" onClick={() => setShowAllRoutes(false)}>
+                        <div className="bg-white dark:bg-surface-800 w-full md:max-w-2xl rounded-t-3xl md:rounded-3xl shadow-2xl flex flex-col max-h-[90vh] md:max-h-[80vh] animate-slide-up" onClick={e => e.stopPropagation()}>
+                            <div className="flex items-center justify-between p-4 border-b border-surface-200 dark:border-surface-700/50">
+                                <h2 className="text-lg font-bold text-surface-900 dark:text-white flex items-center gap-2">
+                                    <Route className="text-brand-500" size={20} /> School Bus Routes
+                                </h2>
+                                <button onClick={() => setShowAllRoutes(false)} className="p-2 bg-surface-100 hover:bg-surface-200 dark:bg-surface-700 dark:hover:bg-surface-600 rounded-full transition-colors"><X size={20} /></button>
+                            </div>
+                            <div className="p-4 overflow-y-auto space-y-4 flex-1 custom-scrollbar">
+                                {allRoutes.length === 0 ? (
+                                    <p className="text-center text-surface-500 py-8">Loading routes...</p>
+                                ) : (
+                                    allRoutes.map(r => (
+                                        <div key={r._id} className="bg-surface-50 dark:bg-surface-900/50 border border-surface-200 dark:border-surface-700/50 rounded-2xl p-4">
+                                            <div className="flex items-center justify-between mb-3">
+                                                <h3 className="font-bold text-surface-900 dark:text-white text-base">{r.name}</h3>
+                                                {r.assignedBus ? (
+                                                    <span className="badge badge-info whitespace-nowrap">BUS {r.assignedBus.busNumber}</span>
+                                                ) : (
+                                                    <span className="badge badge-neutral whitespace-nowrap">Unassigned</span>
+                                                )}
+                                            </div>
+                                            <div className="flex flex-wrap gap-2 mt-2">
+                                                {r.stops?.map((s, i) => (
+                                                    <div key={i} className="flex items-center gap-1.5 bg-white dark:bg-surface-800 border border-surface-200 dark:border-surface-700 px-2.5 py-1.5 rounded-lg text-xs shadow-sm shadow-surface-200/20 dark:shadow-none">
+                                                        <span className="flex items-center justify-center w-4 h-4 rounded-full bg-brand-100 dark:bg-brand-900/50 text-brand-600 dark:text-brand-400 text-[9px] font-bold">{i + 1}</span>
+                                                        <span className="font-medium text-surface-700 dark:text-surface-300">{s.name}</span>
+                                                    </div>
+                                                ))}
+                                                {(!r.stops || r.stops.length === 0) && <span className="text-xs text-surface-400 italic">No stops added</span>}
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )
+            }
+        </div >
     );
 };
 

@@ -63,8 +63,8 @@ const Login = () => {
 
                     {/* Logo & Header */}
                     <div className="text-center mb-6">
-                        <div className="inline-flex bg-brand-100 dark:bg-brand-900/30 p-3.5 rounded-2xl mb-4">
-                            <Bus size={28} className="text-brand-600 dark:text-brand-400" />
+                        <div className="inline-flex bg-white dark:bg-surface-800 p-1.5 rounded-2xl mb-4 shadow-sm border border-surface-100 dark:border-surface-700/50">
+                            <img src="/logo.png" alt="KiddoTrack Logo" className="w-16 h-12 object-contain" />
                         </div>
                         <h2 className="text-2xl sm:text-3xl font-bold text-surface-900 dark:text-white">Welcome Back</h2>
                         <p className="text-surface-400 dark:text-surface-500 text-sm mt-1">Sign in to continue to KiddoTrack</p>

@@ -29,8 +29,8 @@ const messageSchema = new mongoose.Schema({
     }
 }, { timestamps: true });
 
-// Index for auto-deletion after 60 days
-// 60 days * 24 hours * 60 mins * 60 secs = 5184000
-messageSchema.index({ createdAt: 1 }, { expireAfterSeconds: 5184000 });
+// Index for auto-deletion after 15 days
+// 15 days * 24 hours * 60 mins * 60 secs = 1296000
+messageSchema.index({ createdAt: 1 }, { expireAfterSeconds: 1296000 });
 
 module.exports = mongoose.model('Message', messageSchema);

@@ -26,19 +26,19 @@ export default {
                     950: '#431407',
                 },
                 surface: {
-                    // Light mode: warm cream tones
-                    50: '#FFFBF5',
-                    100: '#FFF3E6',
-                    200: '#FFE8CC',
-                    300: '#FFD9AD',
-                    400: '#C4A882',
-                    500: '#9A7B5B',
-                    600: '#7A5C3E',
-                    // Dark mode: chocolate brown tones
-                    700: '#3D2B1A',
-                    800: '#2A1D10',
-                    900: '#1C1208',
-                    950: '#120B04',
+                    // Light mode: clean, cool, slightly bluish greys
+                    50: '#F8FAFC',
+                    100: '#F1F5F9',
+                    200: '#E2E8F0',
+                    300: '#CBD5E1',
+                    400: '#94A3B8',
+                    500: '#64748B',
+                    600: '#475569',
+                    // Dark mode: clean, cool deep greys
+                    700: '#334155',
+                    800: '#1E293B',
+                    900: '#0F172A',
+                    950: '#020617',
                 },
             },
             borderRadius: {
