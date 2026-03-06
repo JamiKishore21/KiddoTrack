@@ -29,7 +29,7 @@ export const setupPushNotifications = async () => {
 
         // Save to backend
         try {
-            const userStr = localStorage.getItem('user');
+            const userStr = localStorage.getItem('userInfo');
             if (userStr) {
                 const user = JSON.parse(userStr);
                 const response = await fetch(`${import.meta.env.VITE_API_URL}/auth/save-fcm-token`, {
