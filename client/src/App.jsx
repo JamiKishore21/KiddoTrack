@@ -57,8 +57,8 @@ function App() {
   useEffect(() => {
     const timer = setTimeout(() => {
       setFadeOut(true);
-      setTimeout(() => setShowSplash(false), 500); // Wait for fade animation
-    }, 1500);
+      setTimeout(() => setShowSplash(false), 800); // Smoother long fade
+    }, 3000); // Last for 3 seconds like Swiggy
     return () => clearTimeout(timer);
   }, []);
 

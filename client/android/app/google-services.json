@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "234484527443",
+    "project_id": "kiddotrack-abe52",
+    "storage_bucket": "kiddotrack-abe52.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:234484527443:android:269207a446777f76ccf1a6",
+        "android_client_info": {
+          "package_name": "com.kiddotrack.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAACgwhLV9-NEUOKwolV1G4dRIjk7JkNfc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
