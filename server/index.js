@@ -16,12 +16,22 @@ connectDB();
 const app = express();
 const server = http.createServer(app);
 
+const sanitizeOrigin = (url) => {
+    if (!url) return null;
+    let sanitized = url.trim().replace(/\/$/, '');
+    if (!sanitized.startsWith('http')) {
+        sanitized = `https://${sanitized}`;
+    }
+    return sanitized;
+};
+
 const ALLOWED_ORIGINS = [
-    process.env.FRONTEND_URL,
-    "http://localhost:5173", // Local Web
-    "http://localhost",      // Capacitor Android
-    "capacitor://localhost"  // Capacitor iOS
-].filter(Boolean).map(url => url.replace(/\/$/, ''));
+    sanitizeOrigin(process.env.FRONTEND_URL),
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "http://localhost",
+    "capacitor://localhost"
+].filter(Boolean);
 
 const corsOptions = {
     origin: (origin, callback) => {
