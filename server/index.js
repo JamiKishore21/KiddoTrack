@@ -15,7 +15,14 @@ connectDB();
 const app = express();
 const server = http.createServer(app);
 
-const ALLOWED_ORIGIN = process.env.FRONTEND_URL || "http://localhost:5173";
+let ALLOWED_ORIGIN = process.env.FRONTEND_URL || "http://localhost:5173";
+
+// Sanitize: Ensure protocol is present for production URLs
+if (ALLOWED_ORIGIN && !ALLOWED_ORIGIN.startsWith('http')) {
+    ALLOWED_ORIGIN = `https://${ALLOWED_ORIGIN}`;
+}
+// Remove trailing slash
+ALLOWED_ORIGIN = ALLOWED_ORIGIN.replace(/\/$/, '');
 
 const io = new Server(server, {
     cors: {
