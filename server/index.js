@@ -30,19 +30,31 @@ const ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://localhost:3000",
     "http://localhost",
-    "capacitor://localhost"
+    "capacitor://localhost",
+    "https://kiddo-track.vercel.app"
 ].filter(Boolean);
 
 const corsOptions = {
     origin: (origin, callback) => {
-        if (!origin || ALLOWED_ORIGINS.includes(origin)) {
+        // Allow if:
+        // 1. No origin (mobile app, server-to-server)
+        // 2. In our explicit list
+        // 3. Any localhost or capacitor origin
+        // 4. Any vercel.app subdomain
+        if (!origin ||
+            ALLOWED_ORIGINS.includes(origin) ||
+            origin.includes('localhost') ||
+            origin.startsWith('capacitor://') ||
+            origin.endsWith('.vercel.app')) {
             callback(null, true);
         } else {
-            callback(new Error('Not allowed by CORS'));
+            console.log('[CORS] Blocked Origin:', origin);
+            callback(null, false); // No error, just no header
         }
     },
-    methods: ["GET", "POST", "PUT", "DELETE"],
-    credentials: true
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization']
 };
 
 const io = new Server(server, {
@@ -69,6 +81,14 @@ app.use('/api/messages', messageRoutes);
 // Basic Route
 app.get('/', (req, res) => {
     res.send('KiddoTrack API is running');
+});
+
+app.get('/api/health', (req, res) => {
+    res.json({
+        status: 'ok',
+        time: new Date().toISOString(),
+        firebase: admin.apps.length > 0 ? 'initialized' : 'not_initialized'
+    });
 });
 
 const parentSessions = {}; // Global Cache
