@@ -17,6 +17,11 @@ const DashboardRouter = () => {
 
   useEffect(() => {
     setupPushNotifications();
+    if (Capacitor.isNativePlatform()) {
+      import('@capacitor/splash-screen').then(({ SplashScreen }) => {
+        SplashScreen.hide();
+      });
+    }
   }, []);
 
   if (!user) return <Navigate to="/login" />;
