@@ -24,9 +24,29 @@ export const setupPushNotifications = async () => {
     await PushNotifications.register();
 
     // On success, we should store this token in the backend linked to the user
-    PushNotifications.addListener('registration', (token) => {
+    PushNotifications.addListener('registration', async (token) => {
         console.log('Push registration success, token: ' + token.value);
-        // TODO: Send token to backend
+
+        // Save to backend
+        try {
+            const userStr = localStorage.getItem('user');
+            if (userStr) {
+                const user = JSON.parse(userStr);
+                const response = await fetch(`${import.meta.env.VITE_API_URL}/auth/save-fcm-token`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${user.token}`
+                    },
+                    body: JSON.stringify({ token: token.value })
+                });
+                if (response.ok) {
+                    console.log('[PUSH] Token saved to server');
+                }
+            }
+        } catch (err) {
+            console.error('[PUSH] Failed to save token to server:', err);
+        }
     });
 
     PushNotifications.addListener('registrationError', (error) => {

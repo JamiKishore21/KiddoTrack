@@ -34,6 +34,9 @@ const userSchema = new mongoose.Schema({
     // For Parent
     linkedChild: { // Simple string/placeholder for now
         type: String,
+    },
+    fcmToken: {
+        type: String,
     }
 }, {
     timestamps: true,

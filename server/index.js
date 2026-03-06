@@ -6,6 +6,7 @@ const { Server } = require('socket.io');
 const connectDB = require('./config/db');
 const Notification = require('./models/Notification');
 const Message = require('./models/Message');
+const { sendPushToBusParents } = require('./utils/pushService');
 const notificationRoutes = require('./routes/notificationRoutes');
 const messageRoutes = require('./routes/messageRoutes');
 
@@ -248,6 +249,14 @@ io.on('connection', (socket) => {
 
         io.to(`bus_${data.busId}`).emit('busStatusUpdate', broadcastData);
         io.to('admin_room').emit('busStatusUpdate', broadcastData); // Alert Admin too
+
+        // --- REAL PUSH NOTIFICATION ---
+        sendPushToBusParents(
+            data.busId,
+            `Bus Alert: ${data.driverName}`,
+            data.message
+        );
+
         console.log(`[STATUS] Bus ${data.busId} (${data.type}): ${data.message}`);
     });
 
