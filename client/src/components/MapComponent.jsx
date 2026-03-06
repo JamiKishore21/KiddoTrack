@@ -64,12 +64,36 @@ const MapComponent = ({
         setIsFollowing(true);
     };
 
-    const routeGeoJSON = drawLine ? {
+    const busMarker = markers.find(m => m.type === 'bus');
+
+    let processedDrawLine = drawLine;
+    if (drawLine && busMarker && (busMarker.lat && busMarker.lng)) {
+        // Find the index of the closest point on the route to the bus
+        let minDistance = Infinity;
+        let closestIdx = 0;
+
+        drawLine.forEach((point, i) => {
+            const dist = Math.sqrt(
+                Math.pow(point.lat - busMarker.lat, 2) +
+                Math.pow(point.lng - busMarker.lng, 2)
+            );
+            if (dist < minDistance) {
+                minDistance = dist;
+                closestIdx = i;
+            }
+        });
+
+        // Only show from the closest point onwards
+        // We include the current bus position as the first point to ensure smooth connection
+        processedDrawLine = [{ lat: busMarker.lat, lng: busMarker.lng }, ...drawLine.slice(closestIdx + 1)];
+    }
+
+    const routeGeoJSON = processedDrawLine ? {
         type: 'Feature',
         properties: {},
         geometry: {
             type: 'LineString',
-            coordinates: drawLine.map(p => [Number(p.lng), Number(p.lat)])
+            coordinates: processedDrawLine.map(p => [Number(p.lng), Number(p.lat)])
         }
     } : null;
 
@@ -101,7 +125,7 @@ const MapComponent = ({
                         />
                         <Layer id="route-layer" type="line"
                             layout={{ 'line-join': 'round', 'line-cap': 'round' }}
-                            paint={{ 'line-color': '#4285F4', 'line-width': 5, 'line-opacity': 1 }}
+                            paint={{ 'line-color': '#ea580c', 'line-width': 5, 'line-opacity': 1 }}
                         />
                     </Source>
                 )}

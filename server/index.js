@@ -15,9 +15,11 @@ connectDB();
 const app = express();
 const server = http.createServer(app);
 
+const ALLOWED_ORIGIN = process.env.FRONTEND_URL || "http://localhost:5173";
+
 const io = new Server(server, {
     cors: {
-        origin: process.env.FRONTEND_URL || "http://localhost:5173",
+        origin: ALLOWED_ORIGIN,
         methods: ["GET", "POST"]
     }
 });
@@ -26,7 +28,11 @@ const authRoutes = require('./routes/authRoutes');
 const busRoutes = require('./routes/busRoutes');
 const routeRoutes = require('./routes/routeRoutes');
 
-app.use(cors());
+app.use(cors({
+    origin: ALLOWED_ORIGIN,
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    credentials: true
+}));
 app.use(express.json());
 
 app.use('/api/auth', authRoutes);
