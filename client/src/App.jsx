@@ -8,9 +8,15 @@ import DriverDashboard from './pages/DriverDashboard';
 import ParentDashboard from './pages/ParentDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import { useAuth } from './context/AuthContext';
+import { setupPushNotifications } from './utils/nativeService';
+import { useEffect } from 'react';
 
 const DashboardRouter = () => {
   const { user } = useAuth();
+
+  useEffect(() => {
+    setupPushNotifications();
+  }, []);
 
   if (!user) return <Navigate to="/login" />;
 

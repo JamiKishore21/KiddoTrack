@@ -7,6 +7,7 @@ import { Play, Square, MapPin, LogOut, Radio, Send, AlertTriangle, Info, Siren, 
 import ThemeToggle from '../components/ThemeToggle';
 import { API_URL } from '../constants';
 import { fetchRoadRoute } from '../utils/fetchRoadRoute';
+import { startBackgroundGeolocation, stopBackgroundGeolocation, isNative } from '../utils/nativeService';
 
 const DriverDashboard = () => {
     const { user, logout } = useAuth();
@@ -294,44 +295,49 @@ const DriverDashboard = () => {
             status: 'starting'
         });
 
-        if (!navigator.geolocation) { alert('Geolocation not supported'); return; }
-        if (watchIdRef.current) return;
-        watchIdRef.current = navigator.geolocation.watchPosition(
-            (pos) => {
-                const { latitude, longitude, speed, heading } = pos.coords;
-                // Only act on valid location
-                if (latitude && longitude && (latitude !== 0 || longitude !== 0)) {
-                    const newLoc = { lat: latitude, lng: longitude };
-                    setLocation(newLoc);
+        if (isNative) {
+            startBackgroundGeolocation((loc) => {
+                const { lat, lng, speed, heading } = loc;
+                setLocation({ lat, lng });
+                socket.emit('driverLocation', { busId: selectedBus.busNumber, lat, lng, speed, heading, driverName: user?.name });
 
-                    if (selectedBus) {
+                // GEOFENCING logic repeated for background context
+                if (assignedRoute?.stops) {
+                    assignedRoute.stops.forEach((stop, index) => {
+                        if (!stop.location?.lat) return;
+                        const dist = calculateDistance(lat, lng, stop.location.lat, stop.location.lng);
+                        const currentStatus = stopStatuses[index] || 'pending';
+                        if (dist < 0.08 && currentStatus === 'pending') markStop(index, 'reached');
+                        else if (dist > 0.15 && currentStatus === 'reached') markStop(index, 'left');
+                    });
+                }
+            });
+        } else if (navigator.geolocation) {
+            if (watchIdRef.current) return;
+            watchIdRef.current = navigator.geolocation.watchPosition(
+                (pos) => {
+                    const { latitude, longitude, speed, heading } = pos.coords;
+                    if (latitude && longitude && (latitude !== 0 || longitude !== 0)) {
+                        const newLoc = { lat: latitude, lng: longitude };
+                        setLocation(newLoc);
                         socket.emit('driverLocation', { busId: selectedBus.busNumber, lat: latitude, lng: longitude, speed, heading, driverName: user?.name });
-
-                        // AUTOMATIC STOP UPDATES (GEOFENCING)
                         if (assignedRoute?.stops) {
                             assignedRoute.stops.forEach((stop, index) => {
                                 if (!stop.location?.lat) return;
                                 const dist = calculateDistance(latitude, longitude, stop.location.lat, stop.location.lng);
                                 const currentStatus = stopStatuses[index] || 'pending';
-
-                                // Within 80 meters -> Reached
-                                if (dist < 0.08 && currentStatus === 'pending') {
-                                    markStop(index, 'reached');
-                                    console.log(`[AUTO] Reached stop ${index}: ${stop.name}`);
-                                }
-                                // Beyond 150 meters -> Left (only if it was already reached)
-                                else if (dist > 0.15 && currentStatus === 'reached') {
-                                    markStop(index, 'left');
-                                    console.log(`[AUTO] Left stop ${index}: ${stop.name}`);
-                                }
+                                if (dist < 0.08 && currentStatus === 'pending') markStop(index, 'reached');
+                                else if (dist > 0.15 && currentStatus === 'reached') markStop(index, 'left');
                             });
                         }
                     }
-                }
-            },
-            (err) => { console.error(err); setStatus('Error: ' + err.message); },
-            { enableHighAccuracy: true, timeout: 30000, maximumAge: 10000 }
-        );
+                },
+                (err) => { console.error(err); setStatus('Error: ' + err.message); },
+                { enableHighAccuracy: true, timeout: 30000, maximumAge: 10000 }
+            );
+        } else {
+            alert('Geolocation not supported');
+        }
     };
 
     const stopSharing = () => {
@@ -340,7 +346,13 @@ const DriverDashboard = () => {
         localStorage.removeItem('driver_stop_statuses');
         setStopStatuses({});
         if (selectedBus) socket.emit('driverSessionEnd', { busId: selectedBus.busNumber });
-        if (watchIdRef.current) { navigator.geolocation.clearWatch(watchIdRef.current); watchIdRef.current = null; }
+
+        if (isNative) {
+            stopBackgroundGeolocation();
+        } else if (watchIdRef.current) {
+            navigator.geolocation.clearWatch(watchIdRef.current);
+            watchIdRef.current = null;
+        }
     };
 
     // Send a status/traffic update to all parents tracking this bus
