@@ -9,7 +9,8 @@ import ParentDashboard from './pages/ParentDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import { useAuth } from './context/AuthContext';
 import { setupPushNotifications } from './utils/nativeService';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import SplashScreen from './components/SplashScreen';
 
 const DashboardRouter = () => {
   const { user } = useAuth();
@@ -45,20 +46,34 @@ const PrivateRoute = ({ children }) => {
 };
 
 function App() {
+  const [showSplash, setShowSplash] = useState(true);
+  const [fadeOut, setFadeOut] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setFadeOut(true);
+      setTimeout(() => setShowSplash(false), 500); // Wait for fade animation
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, []);
+
   return (
-    <Router>
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route path="/dashboard" element={
-          <PrivateRoute>
-            <DashboardRouter />
-          </PrivateRoute>
-        } />
-      </Routes>
-    </Router>
+    <>
+      {showSplash && <SplashScreen fadeOut={fadeOut} />}
+      <Router>
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/dashboard" element={
+            <PrivateRoute>
+              <DashboardRouter />
+            </PrivateRoute>
+          } />
+        </Routes>
+      </Router>
+    </>
   );
 }
 
