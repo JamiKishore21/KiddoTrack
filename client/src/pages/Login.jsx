@@ -4,6 +4,7 @@ import { GoogleLogin } from '@react-oauth/google';
 import { useNavigate, Link } from 'react-router-dom';
 import { Bus, User, Shield, ArrowLeft, Loader2, Mail, Lock, Eye, EyeOff, UserCircle, ChevronDown } from 'lucide-react';
 import ThemeToggle from '../components/ThemeToggle';
+import { isNative } from '../utils/nativeService';
 
 const Login = () => {
     const [role, setRole] = useState('parent');
@@ -169,14 +170,23 @@ const Login = () => {
                         </div>
                     </div>
 
-                    <div className="flex justify-center">
-                        <GoogleLogin
-                            onSuccess={handleGoogleSuccess}
-                            onError={() => setError('Google Login Failed')}
-                            useOneTap
-                            width="320"
-                            shape="pill"
-                        />
+                    <div className="flex flex-col items-center gap-3">
+                        {!isNative ? (
+                            <GoogleLogin
+                                onSuccess={handleGoogleSuccess}
+                                onError={() => setError('Google Login Failed')}
+                                useOneTap
+                                width="320"
+                                shape="pill"
+                            />
+                        ) : (
+                            <div className="text-center p-3 bg-surface-100 dark:bg-surface-900/50 rounded-xl border border-surface-200 dark:border-surface-700/50">
+                                <p className="text-xs text-surface-500 dark:text-surface-400">
+                                    Google Login is currently web-only.
+                                    <br /> Please use your **Email & Password** to sign in.
+                                </p>
+                            </div>
+                        )}
                     </div>
 
 
