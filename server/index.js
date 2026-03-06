@@ -15,18 +15,28 @@ connectDB();
 const app = express();
 const server = http.createServer(app);
 
-let ALLOWED_ORIGIN = process.env.FRONTEND_URL || "http://localhost:5173";
+const ALLOWED_ORIGINS = [
+    process.env.FRONTEND_URL,
+    "http://localhost:5173", // Local Web
+    "http://localhost",      // Capacitor Android
+    "capacitor://localhost"  // Capacitor iOS
+].filter(Boolean).map(url => url.replace(/\/$/, ''));
 
-// Sanitize: Ensure protocol is present for production URLs
-if (ALLOWED_ORIGIN && !ALLOWED_ORIGIN.startsWith('http')) {
-    ALLOWED_ORIGIN = `https://${ALLOWED_ORIGIN}`;
-}
-// Remove trailing slash
-ALLOWED_ORIGIN = ALLOWED_ORIGIN.replace(/\/$/, '');
+const corsOptions = {
+    origin: (origin, callback) => {
+        if (!origin || ALLOWED_ORIGINS.includes(origin)) {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    credentials: true
+};
 
 const io = new Server(server, {
     cors: {
-        origin: ALLOWED_ORIGIN,
+        origin: ALLOWED_ORIGINS,
         methods: ["GET", "POST"]
     }
 });
@@ -35,11 +45,7 @@ const authRoutes = require('./routes/authRoutes');
 const busRoutes = require('./routes/busRoutes');
 const routeRoutes = require('./routes/routeRoutes');
 
-app.use(cors({
-    origin: ALLOWED_ORIGIN,
-    methods: ["GET", "POST", "PUT", "DELETE"],
-    credentials: true
-}));
+app.use(cors(corsOptions));
 app.use(express.json());
 
 app.use('/api/auth', authRoutes);
