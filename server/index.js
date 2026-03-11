@@ -86,26 +86,38 @@ app.get('/', (req, res) => {
 app.get('/api/health', (req, res) => {
     res.json({
         status: 'ok',
-        time: new Date().toISOString(),
-        firebase: admin.apps.length > 0 ? 'initialized' : 'not_initialized'
+        time: new Date().toISOString()
     });
 });
 
 const parentSessions = {}; // Global Cache
 const activeBusSessions = {}; // Global Cache
 
+// Auto-expire stale bus sessions (if driver closes app without pressing Stop)
+// A session is considered stale if no location update received for 5 minutes
+setInterval(() => {
+    const STALE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
+    const now = Date.now();
+    Object.keys(activeBusSessions).forEach((busId) => {
+        const session = activeBusSessions[busId];
+        if (session._lastUpdated && (now - session._lastUpdated) > STALE_THRESHOLD_MS) {
+            console.log(`[SESSION] Bus ${busId} session expired due to inactivity.`);
+            delete activeBusSessions[busId];
+            // Notify admin and parents that bus is offline
+            io.to('admin_room').emit('busSessionEnded', { busId });
+            io.to(`bus_${busId}`).emit('busSessionEnded', { busId });
+        }
+    });
+}, 60 * 1000); // Check every 1 minute
+
 // Socket.io connection
 io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
 
-    // Join a room (e.g., "bus_123" for parents tracking bus 123)
-
-    // Join a room (e.g., "bus_123" for parents tracking bus 123)
     socket.on('joinRoom', (room) => {
         socket.join(room);
         console.log(`User ${socket.id} joined room: ${room}`);
 
-        // If a PARENT joins a bus room, send them current location immediately if available
         if (room.startsWith('bus_') && !room.endsWith('_driver')) {
             const busId = room.split('_')[1];
             if (activeBusSessions[busId]) {
@@ -142,8 +154,8 @@ io.on('connection', (socket) => {
             return;
         }
 
-        // Cache this bus location (RAM)
-        activeBusSessions[data.busId] = data;
+        // Cache this bus location (RAM) — store timestamp for stale-session detection
+        activeBusSessions[data.busId] = { ...data, _lastUpdated: Date.now() };
 
         // Broadcast to everyone listening (Real-time)
         io.to(`bus_${data.busId}`).emit('busLocationUpdate', data);
@@ -184,9 +196,10 @@ io.on('connection', (socket) => {
             delete activeBusSessions[data.busId];
         }
 
-        // Notify Admin to remove marker
+        // Notify Admin AND all parents tracking this bus to remove the marker
         io.to('admin_room').emit('busSessionEnded', { busId: data.busId });
-        console.log(`Bus ${data.busId} ended session.`);
+        io.to(`bus_${data.busId}`).emit('busSessionEnded', { busId: data.busId });
+        console.log(`[SESSION] Bus ${data.busId} trip ended cleanly.`);
     });
 
     const { calculateDelay, formatMinutesToTime, parseTimeToMinutes } = require('./utils/timeUtils');
@@ -206,10 +219,20 @@ io.on('connection', (socket) => {
                     currentStop.status = data.status;
 
                     if (data.status === 'reached') {
-                        // Calculate delay based on scheduled arrivalTime
-                        const delay = calculateDelay(currentStop.arrivalTime);
+                        // Calculate delay based on IST
+                        const schedMin = parseTimeToMinutes(currentStop.arrivalTime);
+                        const eventDate = new Date(payload.timestamp);
+
+                        // IST is UTC + 5:30
+                        const istDate = new Date(eventDate.getTime() + (5.5 * 60 * 60 * 1000));
+                        const istH = istDate.getUTCHours();
+                        const istM = istDate.getUTCMinutes();
+
+                        const actualMin = istH * 60 + istM;
+                        const delay = schedMin !== null ? (actualMin - schedMin) : 0;
+
                         currentStop.delayMinutes = delay;
-                        currentStop.actualTime = formatMinutesToTime(new Date().getHours() * 60 + new Date().getMinutes());
+                        currentStop.actualTime = formatMinutesToTime(actualMin);
 
                         // Propagate delay to all future stops
                         for (let i = data.stopIndex + 1; i < route.stops.length; i++) {

@@ -151,6 +151,16 @@ const ParentDashboard = () => {
             setStatus('Live Tracking');
         });
 
+        // When driver stops trip (or session expires), clear bus marker and reset status
+        socket.on('busSessionEnded', (data) => {
+            if (String(data.busId) === String(trackedBusId)) {
+                setBusLocation(null);
+                setEta(null);
+                setStatus('Trip Ended');
+                notify.info('The bus trip has ended.');
+            }
+        });
+
         // Listen for driver status/traffic updates
         socket.on('busStatusUpdate', (data) => {
             setBusAlerts(prev => [data, ...prev].slice(0, 50));
@@ -197,6 +207,7 @@ const ParentDashboard = () => {
 
         return () => {
             socket.off('busLocationUpdate');
+            socket.off('busSessionEnded');
             socket.off('busStatusUpdate');
             socket.off('stopStatusUpdate');
             socket.off('incomingParentMessage');
@@ -667,6 +678,17 @@ const ParentDashboard = () => {
                                                 const isActive = st === 'reached';
                                                 const isDone = st === 'left';
 
+                                                const parseScheduledTime = (t) => {
+                                                    if (!t) return null;
+                                                    const m = t.match(/^(\d{1,2}):(\d{2})$/);
+                                                    if (m) {
+                                                        const h = parseInt(m[1]);
+                                                        const min = parseInt(m[2]);
+                                                        return h * 60 + min;
+                                                    }
+                                                    return parseTime(t);
+                                                };
+
                                                 const parseTime = (t) => {
                                                     if (!t) return null;
                                                     const m12 = t.match(/(\d+):(\d+)\s*(AM|PM)/i);
@@ -689,8 +711,9 @@ const ParentDashboard = () => {
                                                     return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')} ${p}`;
                                                 };
 
-                                                const schedMin = parseTime(stop.arrivalTime);
+                                                const schedMin = parseScheduledTime(stop.arrivalTime);
                                                 const delay = stop.delayMinutes || 0;
+                                                const formattedSchedTime = schedMin !== null ? formatTime(schedMin) : stop.arrivalTime;
                                                 const realTime = schedMin !== null ? formatTime(schedMin + delay) : null;
 
                                                 return (
@@ -708,11 +731,11 @@ const ParentDashboard = () => {
                                                             <div className="flex flex-col gap-0.5 mt-1">
                                                                 {stop.arrivalTime && (
                                                                     <div className="flex items-center gap-2">
-                                                                        <span className="text-[10px] text-surface-400">Scheduled: {stop.arrivalTime}</span>
+                                                                        <span className="text-[10px] text-surface-400">Scheduled: {formattedSchedTime}</span>
                                                                         {isActive ? (
                                                                             <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">Actual: {stop.actualTime || realTime}</span>
                                                                         ) : (
-                                                                            realTime && realTime !== stop.arrivalTime && (
+                                                                            realTime && realTime !== formattedSchedTime && (
                                                                                 <span className={`text-[10px] font-bold ${delay > 0 ? 'text-red-500' : 'text-emerald-500'}`}>Est: {realTime}</span>
                                                                             )
                                                                         )}

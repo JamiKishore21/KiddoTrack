@@ -40,12 +40,22 @@ const formatMinutesToTime = (totalMinutes) => {
 /**
  * Calculates delay in minutes between current time and scheduled arrival.
  */
-const calculateDelay = (scheduledTimeStr) => {
+/**
+ * Calculates delay in minutes between a reference time (or now) and scheduled arrival.
+ * Reference time is used to ensure the delay is calculated as of the moment the event occurred.
+ */
+const calculateDelay = (scheduledTimeStr, referenceTimestamp = null) => {
     const scheduledMinutes = parseTimeToMinutes(scheduledTimeStr);
     if (scheduledMinutes === null) return 0;
 
-    const now = new Date();
-    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    const date = referenceTimestamp ? new Date(referenceTimestamp) : new Date();
+
+    // IST is UTC + 5:30
+    const istDate = new Date(date.getTime() + (5.5 * 60 * 60 * 1000));
+    const hours = istDate.getUTCHours();
+    const minutes = istDate.getUTCMinutes();
+
+    const currentMinutes = hours * 60 + minutes;
 
     return currentMinutes - scheduledMinutes;
 };

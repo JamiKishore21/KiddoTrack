@@ -21,14 +21,15 @@ const DriverDashboard = () => {
     const [mapMarkers, setMapMarkers] = useState([]);
     const [panelExpanded, setPanelExpanded] = useState(false);
     const [onlineParents, setOnlineParents] = useState({});
-    const [stopStatuses, setStopStatuses] = useState(() => {
-        try {
-            const saved = localStorage.getItem('driver_stop_statuses');
-            return saved ? JSON.parse(saved) : {};
-        } catch { return {}; }
-    });
+    const [stopStatuses, setStopStatuses] = useState({});
     const [roadGeometry, setRoadGeometry] = useState(null);
     const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
+
+    // Refs to always have fresh values inside watchPosition callbacks (avoids stale closures)
+    const isSharingRef = useRef(false);
+    const assignedRouteRef = useRef(null);
+    const stopStatusesRef = useRef({});
+    const selectedBusRef = useRef(null);
 
     // Communication State
     const [statusMessage, setStatusMessage] = useState('');
@@ -56,25 +57,44 @@ const DriverDashboard = () => {
         }
     }, [showAllRoutes]);
 
+    // Keep refs in sync with state
+    useEffect(() => { isSharingRef.current = isSharing; }, [isSharing]);
+    useEffect(() => { assignedRouteRef.current = assignedRoute; }, [assignedRoute]);
+    useEffect(() => { stopStatusesRef.current = stopStatuses; }, [stopStatuses]);
+    useEffect(() => { selectedBusRef.current = selectedBus; }, [selectedBus]);
+
     useEffect(() => {
+        // On app open: always start fresh — driver must explicitly press Start Trip.
+        // Clear any leftover sharing flags from a previous session.
+        localStorage.removeItem('driver_is_sharing');
+        localStorage.removeItem('driver_active_bus');
+        localStorage.removeItem('driver_stop_statuses');
+
         axios.get(`${API_URL}/buses`)
             .then(res => {
                 const buses = res.data;
                 setAvailableBuses(buses);
-                const savedBusId = localStorage.getItem('driver_active_bus');
-                const savedSharing = localStorage.getItem('driver_is_sharing') === 'true';
-                if (savedBusId) {
-                    const bus = buses.find(b => b._id === savedBusId);
-                    if (bus) { setSelectedBus(bus); if (savedSharing) { setIsSharing(true); setStatus('Resuming...'); } }
-                }
             })
             .catch(err => console.error(err));
+
+        // Get a current position for initial map center (display only, not sharing)
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
                 (pos) => setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-                (err) => console.log("Location error:", err)
+                (err) => console.log("Location error:", err),
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
             );
         }
+
+        // Safety net: if driver closes tab without pressing Stop, tell server to end the session
+        const handleBeforeUnload = () => {
+            const busRef = selectedBusRef.current;
+            if (isSharingRef.current && busRef) {
+                socket.emit('driverSessionEnd', { busId: busRef.busNumber });
+            }
+        };
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
     }, []);
 
     const fetchChatHistory = async (busId) => {
@@ -90,7 +110,7 @@ const DriverDashboard = () => {
         }
     };
 
-    useEffect(() => { if (isSharing && selectedBus && !watchIdRef.current) startSharing(); }, [isSharing, selectedBus]);
+    // NOTE: No auto-startSharing from state restore. Driver must press Start Trip button explicitly.
 
     useEffect(() => {
         if (!selectedBus) { setAssignedRoute(null); return; }
@@ -283,17 +303,22 @@ const DriverDashboard = () => {
 
     const startSharing = () => {
         if (!selectedBus) return;
-        setIsSharing(true); setStatus('Transmitting...');
-        localStorage.setItem('driver_active_bus', selectedBus._id); localStorage.setItem('driver_is_sharing', 'true');
+        setIsSharing(true);
+        isSharingRef.current = true; // Immediately enable geofencing in the callback
+        setStatus('Transmitting...');
+        // Note: We do NOT save isSharing to localStorage anymore — driver must always
+        // press Start Trip manually each session to prevent phantom tracking.
 
-        // Initial "I'm online" heartbeat
+        // Initial "I'm online" heartbeat (send location only if we already have a valid fix)
         const initialLoc = (location?.lat && location?.lng) ? { lat: location.lat, lng: location.lng } : {};
-        socket.emit('driverLocation', {
-            busId: selectedBus.busNumber,
-            ...initialLoc,
-            driverName: user?.name,
-            status: 'starting'
-        });
+        if (initialLoc.lat) {
+            socket.emit('driverLocation', {
+                busId: selectedBus.busNumber,
+                ...initialLoc,
+                driverName: user?.name,
+                status: 'starting'
+            });
+        }
 
         if (isNative) {
             startBackgroundGeolocation((loc) => {
@@ -316,24 +341,38 @@ const DriverDashboard = () => {
             if (watchIdRef.current) return;
             watchIdRef.current = navigator.geolocation.watchPosition(
                 (pos) => {
+                    // Only process location updates when trip is actively running
+                    if (!isSharingRef.current) return;
+
                     const { latitude, longitude, speed, heading } = pos.coords;
                     if (latitude && longitude && (latitude !== 0 || longitude !== 0)) {
                         const newLoc = { lat: latitude, lng: longitude };
                         setLocation(newLoc);
-                        socket.emit('driverLocation', { busId: selectedBus.busNumber, lat: latitude, lng: longitude, speed, heading, driverName: user?.name });
-                        if (assignedRoute?.stops) {
-                            assignedRoute.stops.forEach((stop, index) => {
+
+                        const currentBus = selectedBusRef.current;
+                        if (!currentBus) return;
+                        socket.emit('driverLocation', { busId: currentBus.busNumber, lat: latitude, lng: longitude, speed, heading, driverName: user?.name });
+
+                        // Geofencing: use refs so we always have fresh state (no stale closure)
+                        const route = assignedRouteRef.current;
+                        const currentStatuses = stopStatusesRef.current;
+                        if (route?.stops) {
+                            route.stops.forEach((stop, index) => {
                                 if (!stop.location?.lat) return;
                                 const dist = calculateDistance(latitude, longitude, stop.location.lat, stop.location.lng);
-                                const currentStatus = stopStatuses[index] || 'pending';
-                                if (dist < 0.08 && currentStatus === 'pending') markStop(index, 'reached');
-                                else if (dist > 0.15 && currentStatus === 'reached') markStop(index, 'left');
+                                const stopStatus = currentStatuses[index] || 'pending';
+                                if (dist < 0.08 && stopStatus === 'pending') markStop(index, 'reached');
+                                else if (dist > 0.15 && stopStatus === 'reached') markStop(index, 'left');
                             });
                         }
                     }
                 },
-                (err) => { console.error(err); setStatus('Error: ' + err.message); },
-                { enableHighAccuracy: true, timeout: 30000, maximumAge: 10000 }
+                (err) => { console.error(err); setStatus('GPS Error: ' + err.message); },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 0  // Never use cached/stale GPS — always get fresh position
+                }
             );
         } else {
             alert('Geolocation not supported');
@@ -342,10 +381,14 @@ const DriverDashboard = () => {
 
     const stopSharing = () => {
         setIsSharing(false); setStatus('Trip Ended');
-        localStorage.removeItem('driver_is_sharing'); localStorage.removeItem('driver_active_bus');
+        isSharingRef.current = false; // Immediately stop geofencing in the callback
+        localStorage.removeItem('driver_is_sharing');
+        localStorage.removeItem('driver_active_bus');
         localStorage.removeItem('driver_stop_statuses');
         setStopStatuses({});
-        if (selectedBus) socket.emit('driverSessionEnd', { busId: selectedBus.busNumber });
+        if (selectedBus) {
+            socket.emit('driverSessionEnd', { busId: selectedBus.busNumber });
+        }
 
         if (isNative) {
             stopBackgroundGeolocation();
@@ -487,6 +530,19 @@ const DriverDashboard = () => {
                                         const st = stop.status || 'pending';
 
                                         // Time Shift Logic
+                                        const parseScheduledTime = (t) => {
+                                            if (!t) return null;
+                                            // Handle "05:20" format
+                                            const m = t.match(/^(\d{1,2}):(\d{2})$/);
+                                            if (m) {
+                                                const h = parseInt(m[1]);
+                                                const min = parseInt(m[2]);
+                                                return h * 60 + min;
+                                            }
+                                            // Fallback to existing parseTime for other formats
+                                            return parseTime(t);
+                                        };
+
                                         const parseTime = (t) => {
                                             if (!t) return null;
                                             const m12 = t.match(/(\d+):(\d+)\s*(AM|PM)/i);
@@ -509,8 +565,9 @@ const DriverDashboard = () => {
                                             return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')} ${p}`;
                                         };
 
-                                        const schedMin = parseTime(stop.arrivalTime);
+                                        const schedMin = parseScheduledTime(stop.arrivalTime);
                                         const delay = stop.delayMinutes || 0;
+                                        const formattedSchedTime = schedMin !== null ? formatTime(schedMin) : stop.arrivalTime;
                                         const realTime = schedMin !== null ? formatTime(schedMin + delay) : null;
 
                                         return (
@@ -529,11 +586,11 @@ const DriverDashboard = () => {
                                                     <div className="flex flex-col gap-0.5 mt-0.5">
                                                         {stop.arrivalTime && (
                                                             <div className="flex items-center gap-2">
-                                                                <span className="text-[10px] text-surface-400">Scheduled: {stop.arrivalTime}</span>
+                                                                <span className="text-[10px] text-surface-400">Scheduled: {formattedSchedTime}</span>
                                                                 {st === 'reached' ? (
                                                                     <span className="text-[10px] font-bold text-green-600 dark:text-green-400">Actual: {stop.actualTime || realTime}</span>
                                                                 ) : (
-                                                                    realTime && realTime !== stop.arrivalTime && (
+                                                                    realTime && realTime !== formattedSchedTime && (
                                                                         <span className={`text-[10px] font-bold ${delay > 0 ? 'text-red-500' : 'text-green-500'}`}>Est: {realTime}</span>
                                                                     )
                                                                 )}
