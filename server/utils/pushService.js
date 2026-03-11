@@ -68,4 +68,60 @@ const sendPushToBusParents = async (busId, title, body) => {
     }
 };
 
-module.exports = { sendPushToBusParents };
+/**
+ * Sends a push notification to the driver assigned to a specific bus.
+ * Used when a parent sends a chat message so the driver gets a WhatsApp-style alert.
+ */
+const sendPushToDriver = async (busId, title, body) => {
+    try {
+        const Bus = require('../models/Bus');
+        const bus = await Bus.findOne({ busNumber: busId }).populate('assignedDriver');
+        
+        // Find the driver user — look by assignedBus field on the User model
+        const driver = await User.findOne({
+            role: 'driver',
+            assignedBus: bus?._id,
+            fcmToken: { $exists: true, $ne: null }
+        });
+
+        if (!driver?.fcmToken) {
+            console.log(`[PUSH] No FCM token for driver on bus ${busId}`);
+            return;
+        }
+
+        const message = {
+            notification: { title, body },
+            token: driver.fcmToken,
+            android: {
+                priority: 'high',
+                notification: {
+                    sound: 'default',
+                    channelId: 'kiddotrack_messages',
+                    priority: 'high',
+                    defaultSound: true,
+                }
+            },
+            apns: {
+                payload: {
+                    aps: {
+                        sound: 'default',
+                        badge: 1,
+                        contentAvailable: true,
+                    }
+                }
+            },
+            data: { busId: busId.toString(), type: 'parent_message' }
+        };
+
+        if (admin.apps.length > 0) {
+            await admin.messaging().send(message);
+            console.log(`[PUSH] Driver on bus ${busId} notified: "${title}"`);
+        } else {
+            console.log(`[PUSH-SIM] Would notify driver on bus ${busId}: "${title}: ${body}"`);
+        }
+    } catch (err) {
+        console.error('[PUSH ERROR] Failed to notify driver:', err.message);
+    }
+};
+
+module.exports = { sendPushToBusParents, sendPushToDriver };

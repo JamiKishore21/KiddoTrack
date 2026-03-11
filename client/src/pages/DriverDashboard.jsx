@@ -8,6 +8,7 @@ import ThemeToggle from '../components/ThemeToggle';
 import { API_URL } from '../constants';
 import { fetchRoadRoute } from '../utils/fetchRoadRoute';
 import { startBackgroundGeolocation, stopBackgroundGeolocation, isNative } from '../utils/nativeService';
+import { notify, showSystemNotification } from '../utils/notificationSound';
 
 const DriverDashboard = () => {
     const { user, logout } = useAuth();
@@ -143,7 +144,23 @@ const DriverDashboard = () => {
                     setAssignedRoute(prev => ({ ...prev, stops: data.updatedStops }));
                 }
             });
-            socket.on('incomingParentMessage', (data) => setChatMessages(prev => [data, ...prev].slice(0, 100)));
+            socket.on('incomingParentMessage', (data) => {
+                setChatMessages(prev => [data, ...prev].slice(0, 100));
+                // Only notify for messages from parents (not our own driver replies)
+                if (data.sender !== 'driver') {
+                    const senderLabel = data.studentName
+                        ? `💬 ${data.parentName || 'Parent'} (${data.studentName})`
+                        : `💬 ${data.parentName || 'Parent'}`;
+                    // In-app sound + toast (works when app is open)
+                    notify.info(`${senderLabel}: ${data.message}`, { duration: 6000 });
+                    // System-level OS notification (visible even when app is in background on web)
+                    showSystemNotification(
+                        senderLabel,
+                        data.message,
+                        { tag: 'parent-msg', type: 'info', urgent: false }
+                    );
+                }
+            });
             socket.on('tripReset', () => {
                 setStopStatuses({});
                 localStorage.removeItem('driver_stop_statuses');

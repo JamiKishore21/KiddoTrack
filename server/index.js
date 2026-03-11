@@ -6,7 +6,7 @@ const { Server } = require('socket.io');
 const connectDB = require('./config/db');
 const Notification = require('./models/Notification');
 const Message = require('./models/Message');
-const { sendPushToBusParents } = require('./utils/pushService');
+const { sendPushToBusParents, sendPushToDriver } = require('./utils/pushService');
 const notificationRoutes = require('./routes/notificationRoutes');
 const messageRoutes = require('./routes/messageRoutes');
 
@@ -340,6 +340,13 @@ io.on('connection', (socket) => {
         }
 
         console.log(`[MSG] Parent of ${data.studentName} → Bus ${data.busId}: ${data.message}`);
+
+        // Send FCM push notification to the driver (works even when app is in background)
+        sendPushToDriver(
+            data.busId,
+            `💬 ${data.parentName || 'Parent'} (${data.studentName || 'Student'})`,
+            data.message
+        );
     });
 
     // Driver sends a message to parents tracking the bus
