@@ -117,11 +117,16 @@ const DriverDashboard = () => {
         axios.get(`${API_URL}/routes`).then(({ data }) => {
             const route = data.find(r => r.assignedBus?._id === selectedBus._id) || null;
             setAssignedRoute(route);
-            // Initialize stop statuses from DB
+            // Reset stop statuses map — always start fresh from DB.
+            // We do NOT merge localStorage here since we clear it on every app open.
             if (route?.stops) {
                 const dbStatuses = {};
-                route.stops.forEach((s, i) => { if (s.status && s.status !== 'pending') dbStatuses[i] = s.status; });
-                setStopStatuses(prev => ({ ...dbStatuses, ...JSON.parse(localStorage.getItem('driver_stop_statuses') || '{}') }));
+                route.stops.forEach((s, i) => {
+                    if (s.status && s.status !== 'pending') dbStatuses[i] = s.status;
+                });
+                setStopStatuses(dbStatuses);
+            } else {
+                setStopStatuses({});
             }
         }).catch(console.error);
         fetchChatHistory(selectedBus.busNumber);
@@ -142,10 +147,14 @@ const DriverDashboard = () => {
             socket.on('tripReset', () => {
                 setStopStatuses({});
                 localStorage.removeItem('driver_stop_statuses');
-                if (assignedRoute) {
-                    const resetRoute = { ...assignedRoute };
-                    resetRoute.stops = resetRoute.stops.map(s => ({ ...s, status: 'pending' }));
-                    setAssignedRoute(resetRoute);
+                // Use ref to avoid stale closure — assignedRoute inside this callback
+                // would otherwise always be the value from when the effect first ran.
+                const currentRoute = assignedRouteRef.current;
+                if (currentRoute) {
+                    setAssignedRoute(prev => ({
+                        ...prev,
+                        stops: (prev?.stops || []).map(s => ({ ...s, status: 'pending', delayMinutes: 0, actualTime: null }))
+                    }));
                 }
             });
             socket.emit('joinRoom', `bus_${selectedBus.busNumber}_driver`);
@@ -212,9 +221,19 @@ const DriverDashboard = () => {
     const handleResetTrip = () => {
         if (!selectedBus) return;
         if (window.confirm("This will reset all stop statuses for this route. Start new trip?")) {
+            // 1. Emit to server so DB + all clients get the reset
             socket.emit('resetTrip', { busId: selectedBus.busNumber });
+
+            // 2. Optimistic local update — don't wait for socket echo, reset UI immediately
             setStopStatuses({});
             localStorage.removeItem('driver_stop_statuses');
+            setAssignedRoute(prev => {
+                if (!prev) return prev;
+                return {
+                    ...prev,
+                    stops: prev.stops.map(s => ({ ...s, status: 'pending', delayMinutes: 0, actualTime: null }))
+                };
+            });
         }
     };
 
@@ -386,6 +405,17 @@ const DriverDashboard = () => {
         localStorage.removeItem('driver_active_bus');
         localStorage.removeItem('driver_stop_statuses');
         setStopStatuses({});
+
+        // Reset the stops UI to 'pending' immediately so the panel shows a clean state
+        // (The DB will be reset when driver presses "Start New Trip")
+        setAssignedRoute(prev => {
+            if (!prev) return prev;
+            return {
+                ...prev,
+                stops: prev.stops.map(s => ({ ...s, status: 'pending', delayMinutes: 0, actualTime: null }))
+            };
+        });
+
         if (selectedBus) {
             socket.emit('driverSessionEnd', { busId: selectedBus.busNumber });
         }
@@ -397,6 +427,7 @@ const DriverDashboard = () => {
             watchIdRef.current = null;
         }
     };
+
 
     // Send a status/traffic update to all parents tracking this bus
     const handleSendStatus = (e) => {
