@@ -3,7 +3,7 @@ import { socket } from '../socket';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import MapComponent from '../components/MapComponent';
-import { Play, Square, MapPin, LogOut, Radio, Send, AlertTriangle, Info, Siren, MessageSquare, Route, X, Map } from 'lucide-react';
+import { Play, Square, MapPin, LogOut, Radio, Send, AlertTriangle, Info, Siren, MessageSquare, Route, X, Map, RefreshCw } from 'lucide-react';
 import ThemeToggle from '../components/ThemeToggle';
 import { API_URL } from '../constants';
 import { fetchRoadRoute } from '../utils/fetchRoadRoute';
@@ -446,6 +446,18 @@ const DriverDashboard = () => {
     };
 
 
+    // Change Bus: stop any active trip, clear bus + route selection
+    const handleChangeBus = () => {
+        if (isSharing) {
+            if (!window.confirm('A trip is currently active. Stop trip and change bus?')) return;
+            stopSharing();
+        }
+        setSelectedBus(null);
+        setAssignedRoute(null);
+        setStopStatuses({});
+        setLocation(null);
+    };
+
     // Send a status/traffic update to all parents tracking this bus
     const handleSendStatus = (e) => {
         e.preventDefault();
@@ -497,11 +509,20 @@ const DriverDashboard = () => {
                     <div className="bg-glass border-b border-surface-200/50 dark:border-surface-700/40 px-4 py-3 flex items-center justify-between">
                         <div className="flex items-center gap-2">
                             <img src="/logo.png" alt="Logo" className="w-8 h-6 object-contain" />
-                            <h1 className="text-lg font-bold text-surface-900 dark:text-white truncate max-w-[120px]">Hi, {user?.name || 'Driver'}</h1>
+                            <h1 className="text-lg font-bold text-surface-900 dark:text-white truncate max-w-[100px]">Hi, {user?.name || 'Driver'}</h1>
                             {selectedBus && <span className="badge badge-info text-[10px]">BUS-{selectedBus.busNumber}</span>}
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5">
                             {isSharing && <span className="badge badge-success px-2 py-0.5 text-[10px]"><Radio size={8} className="animate-pulse" /> LIVE</span>}
+                            {selectedBus && (
+                                <button
+                                    onClick={handleChangeBus}
+                                    className="flex items-center gap-1 text-[10px] font-bold text-brand-600 dark:text-brand-400 bg-brand-50 dark:bg-brand-900/30 border border-brand-200 dark:border-brand-800 px-2 py-1 rounded-lg active:scale-95 transition-all"
+                                >
+                                    <RefreshCw size={10} />
+                                    Change
+                                </button>
+                            )}
                             <ThemeToggle />
                             <button onClick={logout} className="btn-ghost p-1.5"><LogOut size={16} /></button>
                         </div>
@@ -533,10 +554,29 @@ const DriverDashboard = () => {
 
                     <div className="bg-surface-50 dark:bg-surface-900 rounded-2xl p-4 border border-surface-200 dark:border-surface-700/40">
                         <div className="flex items-center justify-between mb-3">
-                            <div className="flex-1">
+                            <div className="flex-1 min-w-0">
                                 <p className="text-xs text-surface-400 dark:text-surface-500 mb-1 font-medium">Bus Number</p>
                                 {selectedBus ? (
-                                    <p className="text-lg font-bold font-mono text-surface-900 dark:text-white">BUS-{selectedBus.busNumber}</p>
+                                    <div className="flex items-center gap-2">
+                                        <p className="text-lg font-bold font-mono text-surface-900 dark:text-white">BUS-{selectedBus.busNumber}</p>
+                                        {!isSharing && (
+                                            <button
+                                                onClick={handleChangeBus}
+                                                className="flex items-center gap-1 text-[10px] font-bold text-brand-600 dark:text-brand-400 bg-brand-50 dark:bg-brand-900/30 border border-brand-200 dark:border-brand-800 px-2 py-1 rounded-lg hover:bg-brand-100 dark:hover:bg-brand-900/50 transition-all active:scale-95"
+                                            >
+                                                <RefreshCw size={10} /> Change Bus
+                                            </button>
+                                        )}
+                                        {isSharing && (
+                                            <button
+                                                onClick={handleChangeBus}
+                                                className="flex items-center gap-1 text-[10px] font-bold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-2 py-1 rounded-lg hover:bg-red-100 transition-all active:scale-95"
+                                                title="Will stop the current trip"
+                                            >
+                                                <RefreshCw size={10} /> Change Bus
+                                            </button>
+                                        )}
+                                    </div>
                                 ) : (
                                     <select className="input py-2 text-sm" onChange={(e) => setSelectedBus(availableBuses.find(b => b._id === e.target.value))}>
                                         <option value="">Select Bus</option>
