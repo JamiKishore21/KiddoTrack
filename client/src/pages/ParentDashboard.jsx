@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
-import { notify } from '../utils/notificationSound';
+import { notify, showSystemNotification } from '../utils/notificationSound';
 import axios from 'axios';
 import { socket } from '../socket';
 import MapComponent from '../components/MapComponent';
@@ -158,6 +158,11 @@ const ParentDashboard = () => {
                 setEta(null);
                 setStatus('Trip Ended');
                 notify.info('The bus trip has ended.');
+                showSystemNotification(
+                    '🛍️ Trip Ended',
+                    `Bus ${data.busId} trip has ended.`,
+                    { type: 'info', tag: 'kt-trip-end', urgent: false }
+                );
             }
         });
 
@@ -167,16 +172,39 @@ const ParentDashboard = () => {
             setUnreadCount(prev => prev + 1);
             if (data.type === 'emergency') {
                 notify.error(`🚨 Emergency: ${data.message}`, { duration: 10000 });
+                showSystemNotification(
+                    `🚨 Emergency — Bus ${data.busId}`,
+                    data.message,
+                    { type: 'error', tag: 'kt-emergency', urgent: true, autoClose: false }
+                );
             } else if (data.type === 'delay') {
                 notify.warning(`⚠️ Delay: ${data.message}`, { duration: 8000 });
+                showSystemNotification(
+                    `⏰ Bus Delay — Bus ${data.busId}`,
+                    data.message,
+                    { type: 'warning', tag: 'kt-delay' }
+                );
             } else {
                 notify.info(`ℹ️ ${data.message}`, { duration: 5000 });
+                showSystemNotification(
+                    `🚌 Bus ${data.busId} — Update`,
+                    data.message,
+                    { type: 'info', tag: 'kt-bus-info' }
+                );
             }
         });
 
         socket.on('incomingParentMessage', (data) => {
-            // Check if it's from the same bus we are tracking
-            if (data.busId === trackedBusId) {
+            // Incoming driver reply to parent
+            if (data.busId === trackedBusId && data.sender === 'driver') {
+                setChatMessages(prev => [data, ...prev].slice(0, 100));
+                notify.info(`💬 Driver: ${data.message}`, { duration: 6000 });
+                showSystemNotification(
+                    `💬 Driver — Bus ${data.busId}`,
+                    data.message,
+                    { type: 'info', tag: 'kt-driver-msg' }
+                );
+            } else if (data.busId === trackedBusId) {
                 setChatMessages(prev => [data, ...prev].slice(0, 100));
             }
         });

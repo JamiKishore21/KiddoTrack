@@ -149,18 +149,19 @@ const DriverDashboard = () => {
                 // Only notify for messages from parents (not our own driver replies)
                 if (data.sender !== 'driver') {
                     const senderLabel = data.studentName
-                        ? `💬 ${data.parentName || 'Parent'} (${data.studentName})`
-                        : `💬 ${data.parentName || 'Parent'}`;
+                        ? `${data.parentName || 'Parent'} (${data.studentName})`
+                        : (data.parentName || 'Parent');
                     // In-app sound + toast (works when app is open)
-                    notify.info(`${senderLabel}: ${data.message}`, { duration: 6000 });
-                    // System-level OS notification (visible even when app is in background on web)
+                    notify.info(`💬 ${senderLabel}: ${data.message}`, { duration: 6000 });
+                    // System-level OS notification — unique tag per sender so messages stack
                     showSystemNotification(
-                        senderLabel,
+                        `💬 ${senderLabel}`,
                         data.message,
-                        { tag: 'parent-msg', type: 'info', urgent: false }
+                        { tag: `parent-msg-${Date.now()}`, type: 'info', urgent: false }
                     );
                 }
             });
+
             socket.on('tripReset', () => {
                 setStopStatuses({});
                 localStorage.removeItem('driver_stop_statuses');

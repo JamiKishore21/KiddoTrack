@@ -166,31 +166,38 @@ export async function requestNotificationPermission() {
  * Falls back to regular toast if not supported/permitted.
  */
 export function showSystemNotification(title, body, options = {}) {
-    if ('Notification' in window && Notification.permission === 'granted') {
-        try {
-            const notification = new Notification(title, {
-                body,
-                icon: '/vite.svg',
-                badge: '/vite.svg',
-                vibrate: vibrationPatterns[options.type || 'info'],
-                tag: options.tag || 'kiddotrack',
-                renotify: true,
-                requireInteraction: options.urgent || false,
-                ...options,
-            });
+    if (!('Notification' in window) || Notification.permission !== 'granted') return null;
+    try {
+        const notification = new Notification(title, {
+            body,
+            icon: '/logo.png',   // Use app icon
+            badge: '/logo.png',
+            vibrate: vibrationPatterns[options.type || 'info'],
+            tag: options.tag || 'kiddotrack',
+            renotify: true,       // Always re-notify even if same tag
+            requireInteraction: options.urgent || false,
+            silent: false,
+        });
 
-            // Auto-close after duration
-            if (options.autoClose !== false) {
-                setTimeout(() => notification.close(), options.duration || 10000);
-            }
+        // Click to dismiss
+        notification.onclick = () => {
+            notification.close();
+            if (options.onClick) options.onClick();
+            // Bring app window to focus if possible
+            window.focus();
+        };
 
-            return notification;
-        } catch (e) {
-            // Service worker based Notification fails without SW, fall back silently
-            console.warn('System notification failed:', e);
+        // Auto-close after duration (default 8s — feels like WhatsApp)
+        const closeAfter = options.duration || (options.urgent ? 30000 : 8000);
+        if (options.autoClose !== false) {
+            setTimeout(() => notification.close(), closeAfter);
         }
+
+        return notification;
+    } catch (e) {
+        console.warn('System notification failed:', e);
+        return null;
     }
-    return null;
 }
 
 // ─── Notify Wrapper (Toast + Sound + Vibration + System Notification) ─
@@ -198,16 +205,24 @@ export function showSystemNotification(title, body, options = {}) {
 export const notify = {
     success: (message, options = {}) => {
         playNotificationSound('success');
+        // OS notification when app in background
+        if (document.hidden) {
+            showSystemNotification('KiddoTrack', message, { type: 'success', tag: 'kt-success' });
+        }
         return toast.success(message, options);
     },
 
     error: (message, options = {}) => {
         playNotificationSound('error');
+        // Always show OS notification for errors (could be urgent)
+        showSystemNotification('KiddoTrack ⚠️', message, { type: 'error', tag: 'kt-error', urgent: true });
         return toast.error(message, options);
     },
 
     warning: (message, options = {}) => {
         playNotificationSound('warning');
+        // Always show OS notification for warnings
+        showSystemNotification('KiddoTrack ⏰', message, { type: 'warning', tag: 'kt-warning' });
         return toast(message, {
             icon: '⚠️',
             ...options,
@@ -216,6 +231,10 @@ export const notify = {
 
     info: (message, options = {}) => {
         playNotificationSound('info');
+        // OS notification when app in background
+        if (document.hidden) {
+            showSystemNotification('KiddoTrack', message, { type: 'info', tag: 'kt-info' });
+        }
         return toast(message, {
             icon: 'ℹ️',
             ...options,
