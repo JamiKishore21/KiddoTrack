@@ -4,7 +4,7 @@ import { notify } from '../utils/notificationSound';
 import axios from 'axios';
 import { socket } from '../socket';
 import MapComponent from '../components/MapComponent';
-import { User, Bus, ArrowLeft, Clock, LogOut, Radio, MapPin, Send, AlertTriangle, Info, Siren, MessageSquare, X, Route as RouteIcon, Map } from 'lucide-react';
+import { User, Bus, ArrowLeft, Clock, LogOut, Radio, MapPin, Send, AlertTriangle, Info, Siren, MessageSquare, X, Route as RouteIcon, Map, RefreshCw } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import ThemeToggle from '../components/ThemeToggle';
 import { API_URL } from '../constants';
@@ -303,6 +303,17 @@ const ParentDashboard = () => {
 
     useEffect(() => { return () => sessionStorage.clear(); }, [trackedBusId]);
 
+    const handleChangeBus = () => {
+        setIsTracking(false);
+        setIsSelectingPickpoint(false);
+        setTempPickpoint(null);
+        setBusLocation(null);
+        setEta(null);
+        setStatus('Disconnected');
+        setTrackedBusId('');
+        setTrackedStudent(null);
+    };
+
     const handleStartTracking = (e) => {
         e.preventDefault();
         if (trackedBusId.trim()) {
@@ -552,8 +563,7 @@ const ParentDashboard = () => {
             </div>
             <div className="bg-glass border-b border-surface-200/50 dark:border-surface-700/40 px-3 sm:px-4 py-2.5 z-10 flex justify-between items-center flex-shrink-0">
                 <div className="flex items-center gap-2">
-                    <button onClick={() => { setIsTracking(false); setIsSelectingPickpoint(false); setTempPickpoint(null); }} className="btn-ghost p-1.5 md:hidden"><ArrowLeft size={20} /></button>
-                    <div className="flex items-center gap-2 mr-2">
+                    <div className="flex items-center gap-2 mr-1">
                         <img src="/logo.png" alt="Logo" className="w-8 h-6 object-contain hidden md:block" />
                         <h1 className="text-lg font-bold text-surface-900 dark:text-white hidden md:block">KiddoTrack</h1>
                     </div>
@@ -566,7 +576,7 @@ const ParentDashboard = () => {
                         <span className="badge badge-warning text-[10px]">{status}</span>
                     )}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5">
                     {isSelectingPickpoint ? (
                         <p className="text-[10px] text-surface-500 font-bold">Tap map to set pickup</p>
                     ) : eta ? (
@@ -581,7 +591,13 @@ const ParentDashboard = () => {
                             </div>
                         </div>
                     ) : <p className="text-[10px] text-surface-400 animate-pulse">{busLocation ? 'Calculating...' : 'Waiting...'}</p>}
-                    <button onClick={() => { setIsTracking(false); setIsSelectingPickpoint(false); setTempPickpoint(null); }} className="btn-ghost text-xs hidden md:block">Change</button>
+                    {/* Change Bus button — visible on both mobile and desktop */}
+                    <button
+                        onClick={handleChangeBus}
+                        className="flex items-center gap-1 text-[10px] font-bold text-brand-600 dark:text-brand-400 bg-brand-50 dark:bg-brand-900/30 border border-brand-200 dark:border-brand-800 px-2 py-1 rounded-lg active:scale-95 transition-all"
+                    >
+                        <RefreshCw size={10} /> Change
+                    </button>
                     <ThemeToggle />
                     <button onClick={logout} className="btn-ghost p-1.5"><LogOut size={18} /></button>
                 </div>
