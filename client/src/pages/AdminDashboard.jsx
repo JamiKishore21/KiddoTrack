@@ -549,28 +549,29 @@ const AdminDashboard = () => {
 
                 {view === 'drivers' && (
                     <div className="space-y-6">
-                        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                        <div className="bg-white dark:bg-surface-800 rounded-xl shadow-glass border border-surface-200 dark:border-surface-700/50 p-6">
                             <div className="flex justify-between items-center mb-6">
                                 <div>
-                                    <h3 className="text-lg font-bold text-gray-800">Driver Accounts</h3>
-                                    <p className="text-xs text-gray-400 mt-0.5">Only admins can create driver accounts</p>
+                                    <h3 className="text-lg font-bold text-surface-900 dark:text-white">Driver Accounts</h3>
+                                    <p className="text-xs text-surface-400 dark:text-surface-500 mt-0.5">Only admins can create driver accounts</p>
                                 </div>
                                 <button
                                     onClick={() => { setShowDriverModal(true); setDriverError(''); }}
-                                    className="text-sm bg-indigo-50 text-indigo-600 hover:bg-indigo-100 px-3 py-1.5 rounded font-semibold transition-colors flex items-center gap-1"
+                                    className="text-sm bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400 hover:bg-brand-100 dark:hover:bg-brand-900/50 px-3 py-1.5 rounded font-semibold transition-colors flex items-center gap-1"
                                 >
                                     <UserPlus size={15} /> Add Driver
                                 </button>
                             </div>
-                            <table className="w-full text-left text-sm text-gray-600">
-                                <thead className="bg-gray-50 text-gray-700 uppercase font-bold text-xs">
-                                    <tr>
-                                        <th className="px-4 py-3">Name</th>
-                                        <th className="px-4 py-3">Email</th>
-                                        <th className="px-4 py-3">Assigned Bus</th>
-                                        <th className="px-4 py-3">Status</th>
-                                    </tr>
-                                </thead>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left text-sm text-surface-600 dark:text-surface-300">
+                                    <thead className="bg-surface-50 dark:bg-surface-900/50 text-surface-700 dark:text-surface-200 uppercase font-bold text-xs border-b border-surface-200 dark:border-surface-700/50">
+                                        <tr>
+                                            <th className="px-4 py-3">Name</th>
+                                            <th className="px-4 py-3">Email</th>
+                                            <th className="px-4 py-3">Assigned Bus</th>
+                                            <th className="px-4 py-3">Status</th>
+                                        </tr>
+                                    </thead>
                                 <tbody>
                                     {drivers.length === 0 ? (
                                         <tr>
@@ -578,23 +579,24 @@ const AdminDashboard = () => {
                                         </tr>
                                     ) : (
                                         drivers.map(driver => (
-                                            <tr key={driver._id} className="border-b hover:bg-gray-50">
-                                                <td className="px-4 py-3 font-medium text-gray-900">{driver.name}</td>
-                                                <td className="px-4 py-3">{driver.email}</td>
-                                                <td className="px-4 py-3">
-                                                    {driver.assignedBus
-                                                        ? <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-xs font-bold">Bus {driver.assignedBus.busNumber}</span>
-                                                        : <span className="text-gray-400 italic">Unassigned</span>
-                                                    }
-                                                </td>
-                                                <td className="px-4 py-3">
-                                                    <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded text-xs font-bold">Active</span>
-                                                </td>
-                                            </tr>
+                                        <tr key={driver._id} className="border-b border-surface-100 dark:border-surface-700/30 hover:bg-surface-50 dark:hover:bg-surface-700/20">
+                                            <td className="px-4 py-3 font-medium text-surface-900 dark:text-white">{driver.name}</td>
+                                            <td className="px-4 py-3">{driver.email}</td>
+                                            <td className="px-4 py-3">
+                                                {driver.assignedBus
+                                                    ? <span className="badge badge-info text-xs font-bold">Bus {driver.assignedBus.busNumber}</span>
+                                                    : <span className="text-surface-400 dark:text-surface-500 italic">Unassigned</span>
+                                                }
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                <span className="badge badge-success text-xs font-bold">Active</span>
+                                            </td>
+                                        </tr>
                                         ))
                                     )}
                                 </tbody>
                             </table>
+                            </div>
                         </div>
                     </div>
                 )}
@@ -710,8 +712,8 @@ const AdminDashboard = () => {
                                         }
                                     }
                                 }}>
-                                    <option value="">Select a Bus to Monitor</option>
-                                    {buses.map(b => <option key={b._id} value={b._id}>Bus {b.busNumber} ({b.plateNumber})</option>)}
+                                    <option className="bg-white dark:bg-surface-800 text-surface-900 dark:text-white" value="">Select a Bus to Monitor</option>
+                                    {buses.map(b => <option className="bg-white dark:bg-surface-800 text-surface-900 dark:text-white" key={b._id} value={b._id}>Bus {b.busNumber} ({b.plateNumber})</option>)}
                                 </select>
                             </div>
                             <MapComponent
@@ -731,13 +733,13 @@ const AdminDashboard = () => {
                         {/* Stop Timeline Panel */}
                         <div className="w-full lg:w-80 flex flex-col bg-white dark:bg-surface-800 rounded-3xl border border-surface-200 dark:border-surface-700/40 shadow-glass overflow-hidden">
                             {/* Header */}
-                            <div className="bg-emerald-600 text-white px-4 py-3 flex items-center justify-between">
+                            <div className="bg-brand-600 dark:bg-brand-900 border-b border-brand-700 dark:border-brand-800 text-white px-4 py-3 flex items-center justify-between">
                                 <h3 className="font-bold text-sm flex items-center gap-2"><Eye size={16} /> Bus Monitor</h3>
-                                {monitorBusId && <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-full">Bus {buses.find(b => b._id === monitorBusId)?.busNumber}</span>}
+                                {monitorBusId && <span className="text-[10px] bg-white/20 dark:bg-black/20 px-2 py-0.5 rounded-full">Bus {buses.find(b => b._id === monitorBusId)?.busNumber}</span>}
                             </div>
                             <div className="flex border-b border-surface-200 dark:border-surface-700/50">
-                                <div className="flex-1 py-2.5 text-center text-[11px] font-bold text-emerald-600 border-b-2 border-emerald-500">FULL ROUTE</div>
-                                <div className="flex-1 py-2.5 text-center text-[11px] font-bold text-surface-400">BUS INFO</div>
+                                <div className="flex-1 py-2.5 text-center text-[11px] font-bold text-brand-600 dark:text-brand-400 border-b-2 border-brand-500">FULL ROUTE</div>
+                                <div className="flex-1 py-2.5 text-center text-[11px] font-bold text-surface-400 dark:text-surface-500">BUS INFO</div>
                             </div>
 
                             {/* Stop List */}
@@ -755,7 +757,7 @@ const AdminDashboard = () => {
                                 ) : (
                                     <div className="relative px-4 py-3">
                                         {/* Adjusted Vertical Line Alignment: 16px padding + 10px (half of 20px circle) = 26px */}
-                                        <div className="absolute left-[26px] top-6 bottom-6 w-1 bg-emerald-500 rounded-full" />
+                                        <div className="absolute left-[26px] top-6 bottom-6 w-1 bg-brand-500 dark:bg-brand-600 rounded-full" />
                                         <div className="space-y-0">
                                             {monitorRoute.stops.map((stop, i) => {
                                                 const currentBusNum = buses.find(b => b._id === monitorBusId)?.busNumber;
@@ -791,12 +793,12 @@ const AdminDashboard = () => {
 
                                                 return (
                                                     <div key={i} className="relative flex items-start gap-4 min-h-[64px]">
-                                                        <div className={`z-10 w-5 h-5 rounded-full border-[3px] flex-shrink-0 mt-1 transition-all ${isActive ? 'bg-emerald-500 border-emerald-600 ring-4 ring-emerald-500/20' :
-                                                            isDone ? 'bg-emerald-500 border-emerald-600' :
+                                                        <div className={`z-10 w-5 h-5 rounded-full border-[3px] flex-shrink-0 mt-1 transition-all ${isActive ? 'bg-brand-500 border-brand-600 ring-4 ring-brand-500/20' :
+                                                            isDone ? 'bg-brand-500 border-brand-600' :
                                                                 'bg-white dark:bg-surface-800 border-surface-300 dark:border-surface-600'
                                                             }`} />
                                                         <div className="flex-1 pb-4">
-                                                            <p className={`text-sm font-bold ${isDone ? 'text-surface-800 dark:text-surface-200' : isActive ? 'text-emerald-700 dark:text-emerald-400' : 'text-surface-800 dark:text-surface-200'
+                                                            <p className={`text-sm font-bold ${isDone ? 'text-surface-800 dark:text-surface-200' : isActive ? 'text-brand-700 dark:text-brand-400' : 'text-surface-800 dark:text-surface-200'
                                                                 }`}>{stop.name}</p>
                                                             <div className="flex flex-col gap-0.5 mt-1">
                                                                 {stop.arrivalTime && (
@@ -815,8 +817,8 @@ const AdminDashboard = () => {
                                                             </div>
                                                         </div>
                                                         <div className="flex-shrink-0 mt-1">
-                                                            {isDone && <span className="text-xs font-bold text-emerald-600">Bus Left</span>}
-                                                            {isActive && <span className="text-xs font-bold text-emerald-600 animate-pulse">At Stop</span>}
+                                                            {isDone && <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400">Bus Left</span>}
+                                                            {isActive && <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-brand-100 text-brand-700 dark:bg-brand-900/50 dark:text-brand-300 animate-pulse border border-brand-200 dark:border-brand-800">At Stop</span>}
                                                         </div>
                                                     </div>
                                                 );

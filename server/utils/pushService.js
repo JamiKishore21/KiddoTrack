@@ -42,12 +42,30 @@ const sendPushToBusParents = async (busId, title, body) => {
         const message = {
             notification: { title, body },
             tokens: tokens, // Multicast
+            android: {
+                priority: 'high',
+                notification: {
+                    sound: 'default',
+                    channelId: 'kiddotrack_messages',
+                    priority: 'high',
+                    defaultSound: true,
+                }
+            },
+            apns: {
+                payload: {
+                    aps: {
+                        sound: 'default',
+                        badge: 1,
+                        contentAvailable: true,
+                    }
+                }
+            },
             data: { busId: busId.toString() }
         };
 
         if (admin.apps.length > 0) {
             const response = await admin.messaging().sendEachForMulticast(message);
-            console.log(`[PUSH] Successfully sent to ${response.successCount} devices`);
+            // console.log(`[PUSH] Successfully sent to ${response.successCount} devices`);
 
             // Handle failed tokens (e.g., expired)
             if (response.failureCount > 0) {
@@ -61,7 +79,7 @@ const sendPushToBusParents = async (busId, title, body) => {
                 // Optional: Remove invalid tokens from DB
             }
         } else {
-            console.log(`[PUSH-SIM] Would send to ${tokens.length} devices: "${title}: ${body}"`);
+            // console.log(`[PUSH-SIM] Would send to ${tokens.length} devices: "${title}: ${body}"`);
         }
     } catch (err) {
         console.error('[PUSH ERROR] Failed to broadcast:', err.message);
@@ -115,9 +133,9 @@ const sendPushToDriver = async (busId, title, body) => {
 
         if (admin.apps.length > 0) {
             await admin.messaging().send(message);
-            console.log(`[PUSH] Driver on bus ${busId} notified: "${title}"`);
+            // console.log(`[PUSH] Driver on bus ${busId} notified: "${title}"`);
         } else {
-            console.log(`[PUSH-SIM] Would notify driver on bus ${busId}: "${title}: ${body}"`);
+            // console.log(`[PUSH-SIM] Would notify driver on bus ${busId}: "${title}: ${body}"`);
         }
     } catch (err) {
         console.error('[PUSH ERROR] Failed to notify driver:', err.message);

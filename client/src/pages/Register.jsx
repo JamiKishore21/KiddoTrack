@@ -15,18 +15,28 @@ const Register = () => {
     const navigate = useNavigate();
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    const [longLoading, setLongLoading] = useState(false);
 
     const handleManualRegister = async (e) => {
         e.preventDefault();
         setLoading(true);
         setError('');
+        setLongLoading(false);
+
+        const timeout = setTimeout(() => {
+            setLongLoading(true);
+        }, 5000); // 5 seconds
+
         try {
             await register(name, email, password, 'parent');
+            clearTimeout(timeout);
             navigate('/dashboard');
         } catch (err) {
+            clearTimeout(timeout);
             setError(err);
         } finally {
             setLoading(false);
+            setLongLoading(false);
         }
     };
 
@@ -69,6 +79,13 @@ const Register = () => {
                     {error && (
                         <div className="bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 p-3 rounded-xl mb-4 text-sm font-medium animate-slide-down">
                             {error}
+                        </div>
+                    )}
+
+                    {longLoading && !error && (
+                        <div className="bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 p-3 rounded-xl mb-4 text-sm font-medium flex gap-2 items-start animate-slide-down">
+                            <Loader2 size={18} className="animate-spin shrink-0 mt-0.5" />
+                            <p>Server is waking up (Render/Vercel free tier). This might take up to a minute, please wait...</p>
                         </div>
                     )}
 

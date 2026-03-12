@@ -28,6 +28,7 @@ const sanitizeOrigin = (url) => {
 const ALLOWED_ORIGINS = [
     sanitizeOrigin(process.env.FRONTEND_URL),
     "http://localhost:5173",
+    "http://127.0.0.1:5173",
     "http://localhost:3000",
     "http://localhost",
     "capacitor://localhost",
@@ -44,6 +45,7 @@ const corsOptions = {
         if (!origin ||
             ALLOWED_ORIGINS.includes(origin) ||
             origin.includes('localhost') ||
+            origin.includes('127.0.0.1') ||
             origin.startsWith('capacitor://') ||
             origin.endsWith('.vercel.app')) {
             callback(null, true);
@@ -101,7 +103,7 @@ setInterval(() => {
     Object.keys(activeBusSessions).forEach((busId) => {
         const session = activeBusSessions[busId];
         if (session._lastUpdated && (now - session._lastUpdated) > STALE_THRESHOLD_MS) {
-            console.log(`[SESSION] Bus ${busId} session expired due to inactivity.`);
+            // console.log(`[SESSION] Bus ${busId} session expired due to inactivity.`);
             delete activeBusSessions[busId];
             // Notify admin and parents that bus is offline
             io.to('admin_room').emit('busSessionEnded', { busId });
@@ -112,17 +114,17 @@ setInterval(() => {
 
 // Socket.io connection
 io.on('connection', (socket) => {
-    console.log('User connected:', socket.id);
+    // console.log('User connected:', socket.id);
 
     socket.on('joinRoom', (room) => {
         socket.join(room);
-        console.log(`User ${socket.id} joined room: ${room}`);
+        // console.log(`User ${socket.id} joined room: ${room}`);
 
         if (room.startsWith('bus_') && !room.endsWith('_driver')) {
             const busId = room.split('_')[1];
             if (activeBusSessions[busId]) {
                 socket.emit('busLocationUpdate', activeBusSessions[busId]);
-                console.log(`[SOCKET] Immediate location sync for bus ${busId} to parent ${socket.id}`);
+                // console.log(`[SOCKET] Immediate location sync for bus ${busId} to parent ${socket.id}`);
             }
         }
 
@@ -131,14 +133,14 @@ io.on('connection', (socket) => {
             const busId = room.split('_')[1]; // Extract ID from "bus_123_driver"
             const activeParents = Object.values(parentSessions).filter(p => p.busId === busId);
             socket.emit('activeParentsList', activeParents);
-            console.log(`[SOCKET] Syncing ${activeParents.length} active parents to driver in ${room}`);
+            // console.log(`[SOCKET] Syncing ${activeParents.length} active parents to driver in ${room}`);
         }
 
         // If ADMIN joins, send them list of ALL active buses
         if (room === 'admin_room') {
             const activeBuses = Object.values(activeBusSessions);
             socket.emit('activeBusList', activeBuses);
-            console.log(`[SOCKET] Syncing ${activeBuses.length} active buses to Admin`);
+            // console.log(`[SOCKET] Syncing ${activeBuses.length} active buses to Admin`);
         }
     });
 
@@ -199,7 +201,7 @@ io.on('connection', (socket) => {
         // Notify Admin AND all parents tracking this bus to remove the marker
         io.to('admin_room').emit('busSessionEnded', { busId: data.busId });
         io.to(`bus_${data.busId}`).emit('busSessionEnded', { busId: data.busId });
-        console.log(`[SESSION] Bus ${data.busId} trip ended cleanly.`);
+        // console.log(`[SESSION] Bus ${data.busId} trip ended cleanly.`);
     });
 
     const { calculateDelay, formatMinutesToTime, parseTimeToMinutes } = require('./utils/timeUtils');
@@ -271,7 +273,7 @@ io.on('connection', (socket) => {
                     // Broadcast reset to everyone
                     io.to(`bus_${data.busId}`).emit('tripReset', { busId: data.busId });
                     io.to('admin_room').emit('tripReset', { busId: data.busId });
-                    console.log(`[RESET] Bus ${data.busId} trip reset.`);
+                    // console.log(`[RESET] Bus ${data.busId} trip reset.`);
                 }
             }
         } catch (err) {
@@ -310,7 +312,7 @@ io.on('connection', (socket) => {
             data.message
         );
 
-        console.log(`[STATUS] Bus ${data.busId} (${data.type}): ${data.message}`);
+        // console.log(`[STATUS] Bus ${data.busId} (${data.type}): ${data.message}`);
     });
 
     // Parent sends a message to the driver of a specific bus
@@ -374,7 +376,7 @@ io.on('connection', (socket) => {
         } catch (dbErr) {
             console.error('[DB ERR] Failed to save driver message:', dbErr);
         }
-        console.log(`[MSG] Driver of Bus ${data.busId} → Parents: ${data.message}`);
+        // console.log(`[MSG] Driver of Bus ${data.busId} → Parents: ${data.message}`);
     });
 
     // Parent sends location (for Driver to see)
@@ -386,12 +388,12 @@ io.on('connection', (socket) => {
 
             // Broadcast ONLY to the driver of this bus
             io.to(`bus_${data.busId}_driver`).emit('parentLocationUpdate', data);
-            console.log(`[SOCKET] Parent of ${data.studentName} sent location to bus_${data.busId}_driver`);
+            // console.log(`[SOCKET] Parent of ${data.studentName} sent location to bus_${data.busId}_driver`);
         }
     });
 
     socket.on('disconnect', () => {
-        console.log('User disconnected:', socket.id);
+        // console.log('User disconnected:', socket.id);
         const session = parentSessions[socket.id];
         if (session) {
             // Notify driver that parent left (Optional feature, but good for cleanup)
