@@ -3,16 +3,12 @@ const OTP = require('../models/OTP');
 const jwt = require('jsonwebtoken');
 const { OAuth2Client } = require('google-auth-library');
 const bcrypt = require('bcryptjs');
-const nodemailer = require('nodemailer');
+const nodemailer = require('nodemailer'); // To be removed, keeping for now to avoid breaking until Resend is active
+const { Resend } = require('resend');
 
-// Nodemailer transporter (Lazy initialization within sendOTP is better for reliability)
-let transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-    },
-});
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+// Nodemailer is deprecated here
 
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -216,12 +212,35 @@ const sendOTP = async (req, res) => {
         await OTP.deleteMany({ email });
         await OTP.create({ email, otp: hashedOtp });
 
-        // Check if email transporter is properly configured
-        const isEmailConfigured = process.env.EMAIL_USER && process.env.EMAIL_PASS;
+        if (process.env.RESEND_API_KEY) {
+            console.log(`[MAIL] Attempting to send OTP via Resend to ${email}...`);
+            try {
+                const { data, error } = await resend.emails.send({
+                    from: process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev',
+                    to: email,
+                    subject: 'KiddoTrack — Password Reset OTP',
+                    html: `
+                        <div style="font-family:Arial,sans-serif;max-width:480px;margin:auto;padding:24px;border:1px solid #e5e7eb;border-radius:12px">
+                            <h2 style="color:#4f46e5;margin-bottom:8px">KiddoTrack Password Reset</h2>
+                            <p style="color:#374151">Use the OTP below to reset your password. It expires in <strong>10 minutes</strong>.</p>
+                            <div style="font-size:36px;font-weight:bold;letter-spacing:8px;text-align:center;padding:24px;background:#f0f0ff;border-radius:8px;color:#4f46e5;margin:24px 0">${otpCode}</div>
+                            <p style="color:#6b7280;font-size:13px">If you did not request this, please ignore this email.</p>
+                        </div>
+                    `,
+                });
 
-        if (isEmailConfigured) {
-            console.log(`[MAIL] CONFIG: EMAIL_USER=${process.env.EMAIL_USER}, EMAIL_PASS=${process.env.EMAIL_PASS ? '****** (set)' : 'NOT SET'}`);
-            // Create transporter here to ensure latest process.env values are used
+                if (error) {
+                    throw new Error(error.message);
+                }
+
+                console.log(`[MAIL] Email sent successfully via Resend to ${email}. ID: ${data.id}`);
+                res.json({ message: 'OTP sent successfully to your email.' });
+            } catch (mailError) {
+                console.error('[MAIL ERR] Resend failed:', mailError.message);
+                throw mailError; // Catch block will handle this
+            }
+        } else if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+            // Legacy Nodemailer fallback (Gmail)
             const dynamicTransporter = nodemailer.createTransport({
                 service: 'gmail',
                 auth: {
@@ -230,8 +249,7 @@ const sendOTP = async (req, res) => {
                 },
             });
 
-            // Send email
-            console.log(`[MAIL] Attempting to send OTP to ${email}...`);
+            console.log(`[MAIL] Attempting to send OTP via Nodemailer to ${email}...`);
             await dynamicTransporter.sendMail({
                 from: `"KiddoTrack" <${process.env.EMAIL_USER}>`,
                 to: email,
