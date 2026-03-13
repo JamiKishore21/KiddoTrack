@@ -230,6 +230,13 @@ const sendOTP = async (req, res) => {
                 });
 
                 if (error) {
+                    // Check for common Resend testing restrictions
+                    if (error.message.includes('testing emails')) {
+                        return res.status(403).json({ 
+                            message: 'Resend Testing Restriction: You can only send to your own email during testing. Please verify your domain at resend.com for production use.',
+                            originalError: error.message 
+                        });
+                    }
                     throw new Error(error.message);
                 }
 
