@@ -1,5 +1,6 @@
 const express = require('express');
 const { registerUser, loginUser, googleLogin, getAllParents, getAllDrivers, createDriver, sendOTP, verifyOTP, resetPassword } = require('../controllers/authController');
+const User = require('../models/User');
 const { protect, admin } = require('../middleware/authMiddleware');
 
 const router = express.Router();

@@ -5,8 +5,8 @@ const { OAuth2Client } = require('google-auth-library');
 const bcrypt = require('bcryptjs');
 const nodemailer = require('nodemailer');
 
-// Nodemailer transporter
-const transporter = nodemailer.createTransport({
+// Nodemailer transporter (Lazy initialization within sendOTP is better for reliability)
+let transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
         user: process.env.EMAIL_USER,
@@ -220,6 +220,7 @@ const sendOTP = async (req, res) => {
         const isEmailConfigured = process.env.EMAIL_USER && process.env.EMAIL_PASS;
 
         if (isEmailConfigured) {
+            console.log(`[MAIL] CONFIG: EMAIL_USER=${process.env.EMAIL_USER}, EMAIL_PASS=${process.env.EMAIL_PASS ? '****** (set)' : 'NOT SET'}`);
             // Create transporter here to ensure latest process.env values are used
             const dynamicTransporter = nodemailer.createTransport({
                 service: 'gmail',
