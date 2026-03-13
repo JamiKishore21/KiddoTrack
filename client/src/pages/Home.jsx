@@ -44,13 +44,20 @@ const Home = () => {
                 </div>
 
                 {/* CTA Buttons */}
-                <div className="flex flex-col sm:flex-row gap-3 w-full max-w-sm sm:max-w-md animate-slide-up" style={{ animationDelay: '100ms', animationFillMode: 'both' }}>
+                <div className="flex flex-col sm:flex-row gap-3 w-full max-w-sm sm:max-w-2xl animate-slide-up" style={{ animationDelay: '100ms', animationFillMode: 'both' }}>
                     <Link to="/login" className="btn-primary flex-1 text-center flex items-center justify-center gap-2 text-base hover:scale-[1.02] transition-transform">
                         Log In <ArrowRight size={18} />
                     </Link>
                     <Link to="/register" className="btn-secondary flex-1 text-center text-base hover:scale-[1.02] transition-transform">
                         Create Account
                     </Link>
+                    <a 
+                        href="/kiddotrack.apk" 
+                        download 
+                        className="flex-1 text-center flex items-center justify-center gap-2 text-base font-bold bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3.5 rounded-2xl shadow-lg ring-1 ring-emerald-400/50 hover:scale-[1.02] transition-all"
+                    >
+                        <Smartphone size={20} /> Download App (APK)
+                    </a>
                 </div>
 
                 {/* Features */}

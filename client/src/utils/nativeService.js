@@ -23,6 +23,23 @@ export const setupPushNotifications = async () => {
 
     await PushNotifications.register();
 
+    // Create the required notification channel for Android
+    if (Capacitor.getPlatform() === 'android') {
+        try {
+            await PushNotifications.createChannel({
+                id: 'kiddotrack_messages',
+                name: 'KiddoTrack Messages',
+                description: 'Notifications for bus alerts and messages',
+                importance: 5, // high
+                visibility: 1, // public
+                vibration: true,
+            });
+            console.log('[PUSH] Notification channel created');
+        } catch (err) {
+            console.error('[PUSH] Failed to create channel:', err);
+        }
+    }
+
     // On success, we should store this token in the backend linked to the user
     PushNotifications.addListener('registration', async (token) => {
         console.log('Push registration success, token: ' + token.value);
