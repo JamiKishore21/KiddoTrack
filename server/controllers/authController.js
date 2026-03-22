@@ -3,12 +3,8 @@ const OTP = require('../models/OTP');
 const jwt = require('jsonwebtoken');
 const { OAuth2Client } = require('google-auth-library');
 const bcrypt = require('bcryptjs');
-const nodemailer = require('nodemailer'); // To be removed, keeping for now to avoid breaking until Resend is active
-const { Resend } = require('resend');
-
-const resend = new Resend(process.env.RESEND_API_KEY);
-
-// Nodemailer is deprecated here
+const nodemailer = require('nodemailer'); // Legacy fallback
+const axios = require('axios');
 
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -212,39 +208,50 @@ const sendOTP = async (req, res) => {
         await OTP.deleteMany({ email });
         await OTP.create({ email, otp: hashedOtp });
 
-        if (process.env.RESEND_API_KEY) {
-            console.log(`[MAIL] Attempting to send OTP via Resend to ${email}...`);
+        if (process.env.BREVO_API_KEY) {
+            console.log(`[MAIL] Attempting to send OTP via Brevo API to ${email}...`);
             try {
-                const { data, error } = await resend.emails.send({
-                    from: process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev',
-                    to: email,
-                    subject: 'KiddoTrack — Password Reset OTP',
-                    html: `
-                        <div style="font-family:Arial,sans-serif;max-width:480px;margin:auto;padding:24px;border:1px solid #e5e7eb;border-radius:12px">
-                            <h2 style="color:#4f46e5;margin-bottom:8px">KiddoTrack Password Reset</h2>
-                            <p style="color:#374151">Use the OTP below to reset your password. It expires in <strong>10 minutes</strong>.</p>
-                            <div style="font-size:36px;font-weight:bold;letter-spacing:8px;text-align:center;padding:24px;background:#f0f0ff;border-radius:8px;color:#4f46e5;margin:24px 0">${otpCode}</div>
-                            <p style="color:#6b7280;font-size:13px">If you did not request this, please ignore this email.</p>
-                        </div>
-                    `,
-                });
-
-                if (error) {
-                    // Check for common Resend testing restrictions
-                    if (error.message.includes('testing emails')) {
-                        return res.status(403).json({ 
-                            message: 'Resend Testing Restriction: You can only send to your own email during testing. Please verify your domain at resend.com for production use.',
-                            originalError: error.message 
-                        });
+                const response = await axios.post(
+                    'https://api.brevo.com/v3/smtp/email',
+                    {
+                        sender: {
+                            name: 'KiddoTrack',
+                            email: process.env.BREVO_SENDER_EMAIL || process.env.EMAIL_USER
+                        },
+                        to: [ { email: email } ],
+                        subject: 'KiddoTrack — Password Reset OTP',
+                        htmlContent: `
+                            <div style="font-family:Arial,sans-serif;max-width:480px;margin:auto;padding:24px;border:1px solid #e5e7eb;border-radius:12px">
+                                <h2 style="color:#4f46e5;margin-bottom:8px">KiddoTrack Password Reset</h2>
+                                <p style="color:#374151">Use the OTP below to reset your password. It expires in <strong>10 minutes</strong>.</p>
+                                <div style="font-size:36px;font-weight:bold;letter-spacing:8px;text-align:center;padding:24px;background:#f0f0ff;border-radius:8px;color:#4f46e5;margin:24px 0">${otpCode}</div>
+                                <p style="color:#6b7280;font-size:13px">If you did not request this, please ignore this email.</p>
+                            </div>
+                        `
+                    },
+                    {
+                        headers: {
+                            'api-key': process.env.BREVO_API_KEY,
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json'
+                        }
                     }
-                    throw new Error(error.message);
-                }
+                );
 
-                console.log(`[MAIL] Email sent successfully via Resend to ${email}. ID: ${data.id}`);
+                console.log(`[MAIL] Email sent successfully via Brevo to ${email}. MessageId: ${response.data.messageId}`);
                 res.json({ message: 'OTP sent successfully to your email.' });
             } catch (mailError) {
-                console.error('[MAIL ERR] Resend failed:', mailError.message);
-                throw mailError; // Catch block will handle this
+                console.error('[MAIL ERR] Brevo failed:', mailError.response?.data || mailError.message);
+                
+                // Specific error for unverified senders in Brevo
+                if (mailError.response?.status === 400 && JSON.stringify(mailError.response.data).includes('sender')) {
+                    return res.status(403).json({ 
+                        message: 'Brevo Restriction: The sender email is not verified in Brevo. Please verify your Gmail address in the Brevo dashboard.',
+                        originalError: mailError.response.data 
+                    });
+                }
+                
+                throw new Error('Email service failed to send OTP.');
             }
         } else if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
             // Legacy Nodemailer fallback (Gmail)
